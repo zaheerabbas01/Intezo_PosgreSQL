@@ -1,0 +1,145 @@
+.admin-realtime {
+  padding: 20px;
+}
+
+.status-bar {
+  margin-bottom: 20px;
+  text-align: right;
+}
+
+.status {
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status.disconnected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.stat-card h3 {
+  margin: 0 0 10px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: bold;
+  color: #007bff;
+}
+
+.activity-feed {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.activity-feed h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+}
+
+.activities {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  display: flex;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.time {
+  color: #666;
+  font-size: 12px;
+  min-width: 80px;
+  margin-right: 15px;
+}
+
+.description {
+  flex: 1;
+  font-size: 14px;
+}
+
+.online-users {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.online-users h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+}
+
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.user-group {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 15px;
+}
+
+.user-group h4 {
+  margin: 0 0 10px 0;
+  color: #666;
+  font-size: 14px;
+  text-transform: capitalize;
+}
+
+.user-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.user-item:last-child {
+  border-bottom: none;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.login-time {
+  font-size: 12px;
+  color: #666;
+}

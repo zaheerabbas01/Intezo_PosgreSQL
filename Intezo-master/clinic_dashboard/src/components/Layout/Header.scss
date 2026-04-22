@@ -1,0 +1,250 @@
+// Header.scss - Fixed responsive version
+.app-header {
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+
+  .container-fluid {
+    padding: 0 1rem;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    
+    @media (min-width: 768px) {
+      padding: 0 1.5rem;
+    }
+  }
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+    position: relative;
+    gap: 0.5rem;
+    width: 100%;
+    
+    @media (min-width: 768px) {
+      height: 70px;
+      gap: 1rem;
+    }
+  }
+
+  // Sidebar Toggle Button - Visible on ALL screens
+  .sidebar-toggle {
+    display: flex !important; // Force show on all screens
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 6px;
+    color: #4a5568;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+    
+    &:hover {
+      background: #f7fafc;
+      color: #2d3748;
+    }
+    
+    svg {
+      width: 20px;
+      height: 20px;
+      
+      @media (min-width: 768px) {
+        width: 24px;
+        height: 24px;
+      }
+    }
+  }
+
+  .logo {
+    color: #2d3748;
+    font-weight: 700;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    min-width: 0;
+    flex: 1; // Take available space
+
+    .hospital-icon {
+      font-size: 1.25rem;
+      flex-shrink: 0;
+      
+      @media (min-width: 768px) {
+        font-size: 1.5rem;
+      }
+    }
+
+    .logo-text {
+      font-size: 1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+      
+      @media (min-width: 375px) {
+        max-width: 140px;
+      }
+      
+      @media (min-width: 425px) {
+        max-width: 160px;
+      }
+      
+      @media (min-width: 768px) {
+        font-size: 1.25rem;
+        max-width: none;
+      }
+    }
+  }
+
+  // Desktop Navigation - Visible on tablet and desktop
+  .desktop-menu {
+    display: none;
+    
+    @media (min-width: 768px) {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-left: auto;
+    }
+    
+    @media (min-width: 1024px) {
+      gap: 1.5rem;
+    }
+
+    .nav-link {
+      color: #4a5568;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.9rem;
+      padding: 0.5rem 0;
+      position: relative;
+      transition: color 0.2s ease;
+      white-space: nowrap;
+
+      &:hover {
+        color: #3182ce;
+      }
+
+      &.active {
+        color: #3182ce;
+        
+        &::after {
+          content: '';
+          position: absolute;
+          bottom: -1px;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: #3182ce;
+          border-radius: 1px;
+        }
+      }
+    }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid #e2e8f0;
+      color: #718096;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+
+      &:hover {
+        background: #f7fafc;
+        border-color: #cbd5e0;
+        color: #4a5568;
+      }
+    }
+  }
+
+  // Mobile Navigation - Visible only on mobile
+  .mobile-menu {
+    display: flex;
+    margin-left: auto;
+    
+    @media (min-width: 768px) {
+      display: none;
+    }
+
+    .mobile-logout {
+      background: none;
+      border: 1px solid #e2e8f0;
+      color: #718096;
+      padding: 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px; // Touch target size
+      min-height: 44px;
+
+      &:hover {
+        background: #f7fafc;
+        border-color: #cbd5e0;
+        color: #4a5568;
+      }
+      
+      svg {
+        width: 18px;
+        height: 18px;
+      }
+    }
+  }
+}
+
+// Mobile responsive adjustments
+@media (max-width: 767px) {
+  .app-header {
+    .header-content {
+      padding: 0 0.5rem;
+      
+      .logo {
+        .logo-text {
+          font-size: 0.9rem;
+          max-width: 100px;
+        }
+        
+        .hospital-icon {
+          font-size: 1.1rem;
+        }
+      }
+      
+      .sidebar-toggle {
+        margin-right: 0.25rem;
+        padding: 0.4rem;
+        
+        svg {
+          width: 18px;
+          height: 18px;
+        }
+      }
+    }
+  }
+}
+
+// Ensure body doesn't scroll when sidebar is open on mobile
+body.sidebar-open {
+  overflow: hidden;
+  
+  @media (min-width: 1024px) {
+    overflow: auto;
+  }
+}

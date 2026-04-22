@@ -1,0 +1,64 @@
+name: Build APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+    
+    - name: Get dependencies
+      run: flutter pub get
+      working-directory: mobile_app
+    
+    - name: Build APK
+      run: flutter build apk --release
+      working-directory: mobile_app
+    
+    - name: Upload to Cloudflare R2
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: auto
+      run: |
+        # Upload full APK
+        aws s3 cp mobile_app/build/app/outputs/flutter-apk/app-release.apk \
+          s3://${{ secrets.R2_BUCKET }}/intezo-app-latest.apk \
+          --endpoint-url ${{ secrets.R2_ENDPOINT }}
+    
+    - name: Update version.json
+      run: |
+        # Get APK size
+        NEW_SIZE=$(stat -c%s mobile_app/build/app/outputs/flutter-apk/app-release.apk)
+        
+        cat > version.json << EOF
+        {
+          "latest_version": "${{ github.ref_name }}",
+          "build_number": ${{ github.run_number }},
+          "apk_url": "https://apk.intezo.online/intezo-app-latest.apk",
+          "force_update": false,
+          "release_notes": "Bug fixes and performance improvements",
+          "file_size": $NEW_SIZE
+        }
+        EOF
+        
+        # Upload version.json
+        aws s3 cp version.json \
+          s3://${{ secrets.R2_BUCKET }}/version.json \
+          --endpoint-url ${{ secrets.R2_ENDPOINT }}

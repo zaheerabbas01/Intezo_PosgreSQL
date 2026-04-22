@@ -1,0 +1,214 @@
+// Sidebar.scss - Updated for desktop click-to-close
+.app-sidebar {
+  width: 280px;
+  max-width: 85vw;
+  background-color: white;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  height: 100vh;
+  position: fixed;
+  left: -280px;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transition: left 0.3s ease;
+  overflow-y: auto;
+  
+  &.open {
+    left: 0;
+  }
+  
+  // Desktop behavior - always visible but can be closed by clicking outside
+  @media (min-width: 1024px) {
+    left: 0;
+    box-shadow: none;
+    border-right: 1px solid #e2e8f0;
+    z-index: 1;
+    
+    // When sidebar is closed on desktop
+    &:not(.open) {
+      left: -280px;
+    }
+  }
+  
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+    
+    @media (min-width: 768px) {
+      padding: 1.5rem 1.5rem 1rem;
+    }
+    
+    h2 {
+      color: #2d3748;
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0;
+      
+      @media (min-width: 768px) {
+        font-size: 1.25rem;
+      }
+    }
+    
+    .close-sidebar {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 4px;
+      color: #718096;
+      
+      &:hover {
+        background: #f7fafc;
+      }
+      
+      @media (min-width: 1024px) {
+        display: none;
+      }
+    }
+  }
+  
+  .sidebar-nav {
+    flex: 1;
+    padding: 0.5rem 0;
+    
+    @media (min-width: 768px) {
+      padding: 1rem 0;
+    }
+    
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      
+      li {
+        margin-bottom: 0.25rem;
+        
+        a {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.75rem 1rem;
+          color: #4a5568;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          font-weight: 500;
+          
+          @media (min-width: 768px) {
+            padding: 0.875rem 1.5rem;
+          }
+          
+          &:hover {
+            background-color: #f7fafc;
+            color: #2d3748;
+          }
+          
+          &.active {
+            background-color: #ebf8ff;
+            color: #3182ce;
+            font-weight: 600;
+            border-right: 3px solid #3182ce;
+            
+            svg {
+              color: #3182ce;
+            }
+          }
+          
+          svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: #718096;
+            
+            @media (min-width: 768px) {
+              width: 20px;
+              height: 20px;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  .sidebar-footer {
+    padding: 1rem;
+    border-top: 1px solid #e2e8f0;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    
+    @media (min-width: 768px) {
+      padding: 1rem 1.5rem;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      
+      .user-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        flex-shrink: 0;
+        font-size: 0.9rem;
+        
+        @media (min-width: 768px) {
+          width: 40px;
+          height: 40px;
+          font-size: 1rem;
+        }
+      }
+      
+      .user-details {
+        .user-name {
+          margin: 0;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #2d3748;
+          
+          @media (min-width: 768px) {
+            font-size: 0.875rem;
+          }
+        }
+        
+        .user-role {
+          margin: 0;
+          font-size: 0.7rem;
+          color: #718096;
+          
+          @media (min-width: 768px) {
+            font-size: 0.75rem;
+          }
+        }
+      }
+    }
+  }
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  
+  @media (min-width: 1024px) {
+    display: none;
+  }
+}

@@ -1,0 +1,7 @@
+clinic_dashboard/node_modules/
+clinic_dashboard/.env
+backend/node_modules/
+backend/.env
+backend/config/firebase-credentials.json
+node_modules
+.env

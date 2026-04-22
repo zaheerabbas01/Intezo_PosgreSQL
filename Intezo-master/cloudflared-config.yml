@@ -1,0 +1,6 @@
+ingress:
+  - hostname: web.intezo.online
+    service: http://localhost:3001
+  - hostname: api.intezo.online
+    service: http://localhost:3000
+  - service: http_status:404
