@@ -16,7 +16,19 @@ frontend-intezo/node_modules/
 frontend-intezo/.env*
 !frontend-intezo/.env.example
 frontend-intezo/build/
-mobile_app-intezo/.env
+mobile_app-intezo/.env*
+!mobile_app-intezo/.env.example
+
+# Nested repositories are flattened into the main repository. Their original
+# Git metadata is retained locally only as a recovery backup.
+**/.git.nested-backup-*/
+
+# Deployment artifacts belong in the private S3 deployments bucket, not Git.
+*.tgz
+files.txt
+directory.txt
+*.msi
+mobile_app-intezo/android/build/
 
 # Terraform local state and machine-specific values
 infra/terraform/.terraform/

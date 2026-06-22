@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intezo App Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, button { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        .download-btn { background: #28a745; }
+        .download-btn:hover { background: #1e7e34; }
+        .current-version { background: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .file-info { font-size: 14px; color: #666; margin-top: 5px; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Intezo App Manager</h1>
+        
+        <div class="card">
+            <h2>Current Version</h2>
+            <div id="currentVersionInfo" class="current-version">Loading...</div>
+        </div>
+
+        <div class="card">
+            <h2>Download App</h2>
+            <button id="downloadBtn" class="download-btn" onclick="downloadApp()">Download Latest Version</button>
+            <div id="downloadInfo" class="file-info"></div>
+        </div>
+
+        <div class="card">
+            <h2>Upload New Version</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="version">Version Name:</label>
+                    <input type="text" id="version" name="version" required>
+                </div>
+                <div class="form-group">
+                    <label for="versionCode">Version Code:</label>
+                    <input type="number" id="versionCode" name="versionCode" required>
+                </div>
+                <div class="form-group">
+                    <label for="apk">APK File:</label>
+                    <input type="file" id="apk" name="apk" accept=".apk" required>
+                </div>
+                <div class="form-group">
+                    <label for="releaseNotes">Release Notes:</label>
+                    <textarea id="releaseNotes" name="releaseNotes" rows="4"></textarea>
+                </div>
+                <button type="submit">Upload APK</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        async function loadCurrentVersion() {
+            try {
+                const response = await fetch('/api/app/current-version');
+                const version = await response.json();
+                
+                const infoDiv = document.getElementById('currentVersionInfo');
+                if (version.version) {
+                    infoDiv.innerHTML = `
+                        <strong>Version:</strong> ${version.version} (${version.versionCode})<br>
+                        <strong>Size:</strong> ${(version.fileSize / 1024 / 1024).toFixed(2)} MB<br>
+                        <strong>Uploaded:</strong> ${new Date(version.uploadedAt).toLocaleString()}
+                    `;
+                } else {
+                    infoDiv.innerHTML = 'No version uploaded yet';
+                }
+            } catch (error) {
+                document.getElementById('currentVersionInfo').innerHTML = 'Error loading version info';
+            }
+        }
+
+        async function downloadApp() {
+            try {
+                const response = await fetch('/api/app/current-version');
+                const version = await response.json();
+                
+                if (version.apkUrl) {
+                    window.location.href = version.apkUrl;
+                    document.getElementById('downloadInfo').innerHTML = 
+                        `<div class="success">Download started!</div>`;
+                } else {
+                    document.getElementById('downloadInfo').innerHTML = 
+                        '<div class="error">No APK available</div>';
+                }
+            } catch (error) {
+                document.getElementById('downloadInfo').innerHTML = 
+                    '<div class="error">Error downloading APK</div>';
+            }
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const statusDiv = document.getElementById('uploadStatus');
+            
+            statusDiv.innerHTML = '<div>Uploading...</div>';
+            
+            try {
+                const response = await fetch('/api/app/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    statusDiv.innerHTML = '<div class="success">Upload successful!</div>';
+                    e.target.reset();
+                    loadCurrentVersion();
+                } else {
+                    statusDiv.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="error">Upload failed</div>';
+            }
+        });
+
+        loadCurrentVersion();
+    </script>
+</body>
+</html>

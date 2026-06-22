@@ -1,0 +1,2 @@
+ALTER TABLE public.clinics
+ADD COLUMN IF NOT EXISTS manually_closed BOOLEAN NOT NULL DEFAULT false;

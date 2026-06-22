@@ -1,0 +1,5 @@
+# The active application lives in /Intezo-master.
+# These sibling folders are legacy/local working copies and are intentionally
+# excluded from the production repository.
+/backend/
+/supabase/

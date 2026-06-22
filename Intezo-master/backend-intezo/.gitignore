@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+jspm_packages/
+
+# Environment variables (Secrets)
+.env*
+!.env.example
+!.env.production.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Build & Testing
+dist/
+build/
+coverage/
+.nyc_output/
+uploads/
+
+# Editor/System specific
+.DS_Store
+.vscode/
+.idea/
+
+# npm/Yarn cache files. Keep package-lock.json committed.
+.npm
+yarn-integrity

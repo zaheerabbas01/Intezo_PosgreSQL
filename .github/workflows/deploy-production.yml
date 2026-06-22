@@ -1,0 +1,234 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Intezo-master/frontend-intezo/**"
+      - "Intezo-master/backend-intezo/**"
+      - "Intezo-master/Caddyfile"
+      - "Intezo-master/docker-compose.production.yml"
+      - ".github/workflows/deploy-production.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: intezo-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  PROJECT_DIR: Intezo-master
+  FRONTEND_BUCKET: intezo-web-prod-aps1-935797228104
+  DEPLOYMENTS_BUCKET: intezo-deployments-prod-aps1-935797228104
+  CLOUDFRONT_DISTRIBUTION_ID: E15WYTOJJPDASF
+  API_INSTANCE_ID: i-0354c9d8dd32eb1b8
+  API_URL: https://api.intezo.online/api
+  SOCKET_URL: https://api.intezo.online
+  ACME_EMAIL: zaheerszhrs@gmail.com
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.changes.outputs.frontend }}
+      backend: ${{ steps.changes.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: changes
+        name: Detect changed applications
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED_FILES="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")"
+
+          if grep -Eq '^Intezo-master/frontend-intezo/|^\.github/workflows/deploy-production\.yml$' <<< "$CHANGED_FILES"; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^Intezo-master/backend-intezo/|^Intezo-master/(Caddyfile|docker-compose\.production\.yml)$|^\.github/workflows/deploy-production\.yml$' <<< "$CHANGED_FILES"; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-frontend:
+    name: Frontend to S3 and CloudFront
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ env.PROJECT_DIR }}/frontend-intezo/package-lock.json
+
+      - name: Install and build
+        working-directory: ${{ env.PROJECT_DIR }}/frontend-intezo
+        env:
+          # The existing frontend has non-fatal ESLint warnings. Keep them
+          # visible in the build log without blocking production deployment.
+          CI: "false"
+          GENERATE_SOURCEMAP: "false"
+          REACT_APP_API_URL: ${{ env.API_URL }}
+          REACT_APP_SOCKET_URL: ${{ env.SOCKET_URL }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Authenticate to AWS using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload immutable assets first
+        working-directory: ${{ env.PROJECT_DIR }}/frontend-intezo
+        run: aws s3 sync build/static "s3://$FRONTEND_BUCKET/static" --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload application shell
+        working-directory: ${{ env.PROJECT_DIR }}/frontend-intezo
+        run: aws s3 sync build "s3://$FRONTEND_BUCKET" --delete --exclude "static/*" --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths "/*"
+
+  deploy-backend:
+    name: Backend to EC2 through SSM
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to AWS using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package backend without secrets
+        shell: bash
+        run: |
+          tar \
+            --exclude=backend-intezo/node_modules \
+            --exclude=backend-intezo/uploads \
+            --exclude=backend-intezo/.env \
+            --exclude=backend-intezo/.env.production \
+            -czf "/tmp/intezo-${GITHUB_SHA}.tgz" \
+            -C "$PROJECT_DIR" \
+            backend-intezo Caddyfile docker-compose.production.yml
+
+      - name: Upload release artifact
+        run: aws s3 cp "/tmp/intezo-${GITHUB_SHA}.tgz" "s3://$DEPLOYMENTS_BUCKET/releases/${GITHUB_SHA}.tgz" --sse AES256
+
+      - name: Deploy release and wait for health check
+        shell: bash
+        run: |
+          read -r -d '' REMOTE_COMMAND <<'SCRIPT' || true
+          set -eu
+          RELEASE_ID="__RELEASE_ID__"
+          REGION="__REGION__"
+          BUCKET="__BUCKET__"
+          ACME_EMAIL="__ACME_EMAIL__"
+          BASE="/opt/intezo"
+          TARGET="$BASE/releases/$RELEASE_ID"
+          ARCHIVE="/tmp/intezo-$RELEASE_ID.tgz"
+
+          PREVIOUS=""
+          if [ -L "$BASE/current" ]; then
+            PREVIOUS="$(readlink -f "$BASE/current")"
+          elif [ -d "$BASE/releases/current" ]; then
+            PREVIOUS="$BASE/releases/current"
+          fi
+
+          mkdir -p "$TARGET"
+          aws s3 cp "s3://$BUCKET/releases/$RELEASE_ID.tgz" "$ARCHIVE" --region "$REGION"
+          tar -xzf "$ARCHIVE" -C "$TARGET"
+          ln -sfn "$BASE/shared/backend.env" "$TARGET/backend-intezo/.env.production"
+
+          cd "$TARGET"
+          if ! ACME_EMAIL="$ACME_EMAIL" docker compose -f docker-compose.production.yml up -d --build --remove-orphans; then
+            if [ -n "$PREVIOUS" ] && [ -f "$PREVIOUS/docker-compose.production.yml" ]; then
+              cd "$PREVIOUS"
+              ACME_EMAIL="$ACME_EMAIL" docker compose -f docker-compose.production.yml up -d --build --remove-orphans || true
+            fi
+            exit 1
+          fi
+
+          HEALTHY=false
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent --show-error https://api.intezo.online/healthz >/dev/null; then
+              HEALTHY=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$HEALTHY" != "true" ]; then
+            docker compose -f docker-compose.production.yml logs --tail=100 api
+            if [ -n "$PREVIOUS" ] && [ -f "$PREVIOUS/docker-compose.production.yml" ]; then
+              cd "$PREVIOUS"
+              ACME_EMAIL="$ACME_EMAIL" docker compose -f docker-compose.production.yml up -d --build --remove-orphans || true
+            fi
+            exit 1
+          fi
+
+          ln -sfn "$TARGET" "$BASE/current"
+          rm -f "$ARCHIVE"
+          docker compose -f docker-compose.production.yml ps
+          SCRIPT
+
+          REMOTE_COMMAND="${REMOTE_COMMAND//__RELEASE_ID__/$GITHUB_SHA}"
+          REMOTE_COMMAND="${REMOTE_COMMAND//__REGION__/$AWS_REGION}"
+          REMOTE_COMMAND="${REMOTE_COMMAND//__BUCKET__/$DEPLOYMENTS_BUCKET}"
+          REMOTE_COMMAND="${REMOTE_COMMAND//__ACME_EMAIL__/$ACME_EMAIL}"
+          jq -n --arg command "$REMOTE_COMMAND" '{commands: [$command]}' > /tmp/ssm-parameters.json
+
+          COMMAND_ID="$(aws ssm send-command \
+            --instance-ids "$API_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Intezo release ${GITHUB_SHA}" \
+            --timeout-seconds 1800 \
+            --parameters file:///tmp/ssm-parameters.json \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          STATUS="Pending"
+          for attempt in $(seq 1 180); do
+            STATUS="$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$API_INSTANCE_ID" \
+              --query 'Status' \
+              --output text 2>/dev/null || echo Pending)"
+            case "$STATUS" in
+              Success|Cancelled|Failed|TimedOut) break ;;
+            esac
+            sleep 10
+          done
+
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$API_INSTANCE_ID" \
+            --query '{Status:Status,Output:StandardOutputContent,Errors:StandardErrorContent}' \
+            --output json
+
+          test "$STATUS" = "Success"

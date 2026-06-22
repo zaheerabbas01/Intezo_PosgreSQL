@@ -1,0 +1,155 @@
+.staff-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f7fafc;
+
+  .staff-content {
+    flex: 1;
+    padding: 2rem;
+    margin-left: 0;
+    transition: margin-left 0.3s ease;
+
+    &.sidebar-open {
+      margin-left: 250px;
+    }
+
+    .staff-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+
+      .sidebar-toggle {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        margin-right: 1rem;
+        padding: 0.5rem;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+
+        &:hover {
+          background-color: #e2e8f0;
+        }
+      }
+
+      h1 {
+        color: #2d3748;
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
+        flex: 1;
+      }
+
+      .add-staff-btn {
+        background: #48bb78;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover {
+          background: #38a169;
+          transform: translateY(-1px);
+        }
+      }
+    }
+
+    .staff-grid {
+      display: grid;
+      gap: 2rem;
+
+      .staff-card {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+        h2 {
+          color: #2d3748;
+          margin-bottom: 1.5rem;
+          font-size: 1.5rem;
+          font-weight: 600;
+        }
+
+        .staff-list {
+          .staff-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            transition: box-shadow 0.2s;
+
+            &:hover {
+              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+
+            .staff-info {
+              h3 {
+                margin: 0 0 0.5rem 0;
+                color: #2d3748;
+                font-size: 1.1rem;
+              }
+
+              p {
+                margin: 0.25rem 0;
+                color: #718096;
+                font-size: 0.9rem;
+              }
+            }
+
+            .staff-actions {
+              display: flex;
+              gap: 0.5rem;
+
+              .btn-primary, .btn-danger {
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 6px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+
+                &:hover {
+                  transform: translateY(-1px);
+                }
+              }
+
+              .btn-primary {
+                background: #4299e1;
+                color: white;
+
+                &:hover {
+                  background: #3182ce;
+                }
+              }
+
+              .btn-danger {
+                background: #f56565;
+                color: white;
+
+                &:hover {
+                  background: #e53e3e;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #718096;
+      font-size: 1.1rem;
+    }
+  }
+}

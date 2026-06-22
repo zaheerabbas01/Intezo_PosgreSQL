@@ -1,0 +1,9 @@
+node_modules
+.env*
+!.env.example
+!.env.production.example
+.git
+uploads
+coverage
+*.log
+config/Redis-x64-3.0.504.msi
