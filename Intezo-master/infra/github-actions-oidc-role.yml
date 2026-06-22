@@ -17,9 +17,6 @@ Parameters:
   DeploymentsBucket:
     Type: String
     Default: intezo-deployments-prod-aps1-935797228104
-  CloudFrontDistributionId:
-    Type: String
-    Default: E15WYTOJJPDASF
   ApiInstanceId:
     Type: String
     Default: i-0354c9d8dd32eb1b8
@@ -76,10 +73,14 @@ Resources:
                   - s3:AbortMultipartUpload
                   - s3:PutObject
                 Resource: !Sub arn:${AWS::Partition}:s3:::${DeploymentsBucket}/releases/*
+              - Sid: DiscoverFrontendDistribution
+                Effect: Allow
+                Action: cloudfront:ListDistributions
+                Resource: "*"
               - Sid: InvalidateFrontend
                 Effect: Allow
                 Action: cloudfront:CreateInvalidation
-                Resource: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistributionId}
+                Resource: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
               - Sid: SendDeploymentCommand
                 Effect: Allow
                 Action: ssm:SendCommand

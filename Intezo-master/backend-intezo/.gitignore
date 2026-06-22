@@ -27,4 +27,5 @@ uploads/
 
 # npm/Yarn cache files. Keep package-lock.json committed.
 .npm
+.npm-cache/
 yarn-integrity
