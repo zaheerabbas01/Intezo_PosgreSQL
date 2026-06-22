@@ -5,7 +5,7 @@ echo Starting Intezo App with Cloudflare Tunnel
 echo ========================================
 
 echo Step 2: Starting backend server...
-start "Backend" cmd /k "cd /d c:\Projects\intezo-postgreSQL\Intezo-master\backend && npm start"
+start "Backend" cmd /k "cd /d c:\Projects\intezo-postgreSQL\Intezo-master\backend-intezo && npm run dev"
 
 timeout /t 5
 
@@ -21,8 +21,8 @@ echo.
 echo ========================================
 echo All services started!
 echo ========================================
-echo Backend: http://localhost:3000
-echo Web Dashboard: http://localhost:3001
+echo Backend: http://localhost:3000 or http://202.47.48.188:3000
+echo Web Dashboard: http://localhost:3001 or http://202.47.48.188:3001
 echo WEB DASHBOARD: https://web.intezo.online
 echo API BACKEND: https://api.intezo.online
 echo.

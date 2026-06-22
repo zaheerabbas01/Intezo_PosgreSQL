@@ -1,0 +1,5 @@
+aws_region              = "ap-south-1"
+instance_type           = "t4g.micro"
+web_domain              = "web.intezo.online"
+api_domain              = "api.intezo.online"
+web_acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/replace-me"

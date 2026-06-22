@@ -7,8 +7,8 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      MONGO_INITDB_ROOT_USERNAME: zaheerszhrs
-      MONGO_INITDB_ROOT_PASSWORD: zaheerking4321
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-intezo_local}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?Set MONGO_INITDB_ROOT_PASSWORD in your local .env file}
 
   redis:
     image: redis:7.0

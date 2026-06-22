@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Least-privilege GitHub Actions OIDC role for Intezo production deployment
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Default: zaheerabbas01
+  GitHubRepository:
+    Type: String
+    Default: Intezo_PosgreSQL
+  ProductionBranch:
+    Type: String
+    Default: main
+  FrontendBucket:
+    Type: String
+    Default: intezo-web-prod-aps1-935797228104
+  DeploymentsBucket:
+    Type: String
+    Default: intezo-deployments-prod-aps1-935797228104
+  CloudFrontDistributionId:
+    Type: String
+    Default: E15WYTOJJPDASF
+  ApiInstanceId:
+    Type: String
+    Default: i-0354c9d8dd32eb1b8
+  DeploymentRegion:
+    Type: String
+    Default: ap-south-1
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: intezo-github-production-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOwner}/${GitHubRepository}:ref:refs/heads/${ProductionBranch}
+      Policies:
+        - PolicyName: intezo-production-deployment
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListFrontendBucket
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !Sub arn:${AWS::Partition}:s3:::${FrontendBucket}
+              - Sid: WriteFrontendObjects
+                Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${FrontendBucket}/*
+              - Sid: UploadBackendRelease
+                Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:PutObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${DeploymentsBucket}/releases/*
+              - Sid: InvalidateFrontend
+                Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistributionId}
+              - Sid: SendDeploymentCommand
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ec2:${DeploymentRegion}:${AWS::AccountId}:instance/${ApiInstanceId}
+                  - !Sub arn:${AWS::Partition}:ssm:${DeploymentRegion}::document/AWS-RunShellScript
+              - Sid: ReadDeploymentCommandResult
+                Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: "*"
+
+Outputs:
+  GitHubActionsRoleArn:
+    Description: Add this value to the GitHub repository variable AWS_ROLE_ARN
+    Value: !GetAtt GitHubDeployRole.Arn

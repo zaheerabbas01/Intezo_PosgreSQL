@@ -5,3 +5,20 @@ backend/.env
 backend/config/firebase-credentials.json
 node_modules
 .env
+
+# Current project directories
+backend-intezo/node_modules/
+backend-intezo/.env*
+!backend-intezo/.env.example
+!backend-intezo/.env.production.example
+backend-intezo/uploads/
+frontend-intezo/node_modules/
+frontend-intezo/.env*
+!frontend-intezo/.env.example
+frontend-intezo/build/
+mobile_app-intezo/.env
+
+# Terraform local state and machine-specific values
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+infra/terraform/terraform.tfvars
