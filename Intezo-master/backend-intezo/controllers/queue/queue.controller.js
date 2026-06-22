@@ -17,6 +17,52 @@ export const validateNumeric = (value, min = 0) => {
   return (isNaN(num) || num < min) ? null : num;
 };
 
+const createHttpError = (message, statusCode) => Object.assign(new Error(message), { statusCode });
+
+const getAssociationClinicId = (association) => {
+  const clinic = association?.clinic;
+  return clinic && typeof clinic === 'object' ? clinic.id || clinic._id : clinic;
+};
+
+const resolveQueueClinicId = (req, doctorId) => {
+  if (!doctorId) throw createHttpError('Doctor ID is required', 400);
+
+  if (req.clinic) return req.clinic.id;
+  if (!req.doctor) throw createHttpError('Authenticated clinic or doctor is required', 401);
+  if (String(req.doctor.id) !== String(doctorId)) {
+    throw createHttpError('Doctors can only manage their own queues', 403);
+  }
+
+  const requestedClinicId = req.body?.clinicId || req.query?.clinicId;
+  const associations = Array.isArray(req.doctor.clinics) ? req.doctor.clinics : [];
+  const association = requestedClinicId
+    ? associations.find(item => String(getAssociationClinicId(item)) === String(requestedClinicId) && item.isActive !== false)
+    : associations.find(item => item.isActive) || associations[0];
+
+  if (!association) {
+    throw createHttpError('Doctor is not active in the selected clinic', 403);
+  }
+  return getAssociationClinicId(association);
+};
+
+const authorizeQueueMutation = async (req, queueId) => {
+  const queue = await Queue.findByPk(queueId);
+  if (!queue) throw createHttpError('Queue entry not found', 404);
+
+  if (req.clinic && String(queue.clinicId) !== String(req.clinic.id)) {
+    throw createHttpError('Queue entry does not belong to this clinic', 403);
+  }
+  if (req.doctor && String(queue.doctorId) !== String(req.doctor.id)) {
+    throw createHttpError('Queue entry does not belong to this doctor', 403);
+  }
+
+  const requestedClinicId = req.body?.clinicId || req.query?.clinicId;
+  if (requestedClinicId && String(queue.clinicId) !== String(requestedClinicId)) {
+    throw createHttpError('Queue entry does not belong to the selected clinic', 403);
+  }
+  return queue;
+};
+
 export const triggerQueueUpdate = async (clinicId, doctorId = null, manualData = null) => {
   try {
     const broadcastData = manualData || await queueService.getQueueBroadcastPayload(clinicId, doctorId);
@@ -108,12 +154,12 @@ export const getDetailedQueueWithWaitTimes = async (req, res) => {
 export const skipPatient = async (req, res) => {
   try {
     const { doctorId } = req.body;
-    const clinicId = req.clinic.id;
+    const clinicId = resolveQueueClinicId(req, doctorId);
     const { newNumber, hasNextPatient } = await queueService.advanceQueue({ doctorId, clinicId, action: 'skip' });
     setImmediate(() => triggerQueueUpdate(clinicId, doctorId));
     res.json({ success: true, currentNumber: newNumber, hasNextPatient });
   } catch (err) {
-    const status = ['NO_MORE_PATIENTS', 'NO_CURRENT_PATIENT'].includes(err.message) ? 400 : 500;
+    const status = err.statusCode || (['NO_MORE_PATIENTS', 'NO_CURRENT_PATIENT'].includes(err.message) ? 400 : 500);
     res.status(status).json({ error: err.message });
   }
 };
@@ -121,17 +167,7 @@ export const skipPatient = async (req, res) => {
 export const getSkippedPatients = async (req, res) => {
   try {
     const doctorId = req.params.doctorId;
-    let clinicId = req.clinic?.id;
-
-    // Doctor context: derive clinicId from the doctor's active clinic
-    if (!clinicId && req.doctor) {
-      const { Doctor } = await import('../../models/index.js');
-      const doctor = await Doctor.findByPk(doctorId, { attributes: ['clinics'] });
-      const activeAssoc = doctor?.clinics?.find(c => c.isActive) || doctor?.clinics?.[0];
-      clinicId = activeAssoc?.clinic;
-    }
-
-    if (!clinicId) return res.status(400).json({ error: 'Could not determine clinic' });
+    const clinicId = resolveQueueClinicId(req, doctorId);
 
     const skipped = await Queue.findAll({
       where: { clinicId, doctorId, status: 'skipped' },
@@ -146,23 +182,25 @@ export const getSkippedPatients = async (req, res) => {
       skippedAt: q.skippedAt
     }));
     res.json(result);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 };
 
 export const serveSkippedPatient = async (req, res) => {
   try {
+    await authorizeQueueMutation(req, req.params.queueId);
     const queue = await updateQueueStatus(req.params.queueId, 'served');
     setImmediate(() => triggerQueueUpdate(queue.clinicId, queue.doctorId));
     res.json({ success: true, message: 'Patient served' });
-  } catch (err) { res.status(400).json({ error: err.message }); }
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.message }); }
 };
 
 export const callSkippedPatient = async (req, res) => {
   try {
+    await authorizeQueueMutation(req, req.params.queueId);
     const queue = await updateQueueStatus(req.params.queueId, 'waiting');
     setImmediate(() => triggerQueueUpdate(queue.clinicId, queue.doctorId));
     res.json({ success: true, message: 'Patient called back' });
-  } catch (err) { res.status(400).json({ error: err.message }); }
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.message }); }
 };
 
 export const toggleDoctorStatus = async (req, res) => {
@@ -180,23 +218,25 @@ export const toggleDoctorStatus = async (req, res) => {
 export const updateCurrentNumber = async (req, res) => {
   try {
     const { doctorId, action, newNumber: specificNumber } = req.body;
-    const clinicId = req.clinic.id;
-    const { newNumber, servedQueue, doctor } = await queueService.advanceQueue({ doctorId, clinicId, action, specificNumber });
+    const clinicId = resolveQueueClinicId(req, doctorId);
+    const { newNumber, servedQueue, doctor, hasNextPatient } = await queueService.advanceQueue({ doctorId, clinicId, action, specificNumber });
+    const clinic = req.clinic || await Clinic.findByPk(clinicId, { attributes: ['id', 'name'] });
+    const clinicName = clinic?.name || 'Clinic';
 
     setImmediate(async () => {
       await triggerQueueUpdate(clinicId, doctorId);
       if (servedQueue?.patient) {
-        FCMService.sendPatientServedNotification(servedQueue.patient.id, req.clinic.name || 'Clinic', doctor.name, servedQueue.id).catch(e => console.error('FCM Served Error:', e));
+        FCMService.sendPatientServedNotification(servedQueue.patient.id, clinicName, doctor.name, servedQueue.id).catch(e => console.error('FCM Served Error:', e));
       }
       const upcoming = await Queue.findAll({ where: { clinicId, doctorId, number: { [Op.gt]: newNumber }, status: 'waiting' }, order: [['number', 'ASC']], limit: 3, include: ['patient'] });
       upcoming.forEach((u, index) => {
-        if (u.patient) setTimeout(() => FCMService.sendQueueNotification(u.patient.id, newNumber, u.number, req.clinic.name, doctor.name).catch(e => console.error('FCM Queue Error:', e)), index * 1000);
+        if (u.patient) setTimeout(() => FCMService.sendQueueNotification(u.patient.id, newNumber, u.number, clinicName, doctor.name).catch(e => console.error('FCM Queue Error:', e)), index * 1000);
       });
     });
 
-    res.json({ success: true, currentNumber: newNumber });
+    res.json({ success: true, currentNumber: newNumber, hasNextPatient });
   } catch (err) {
-    res.status(err.message === 'NO_MORE_PATIENTS' ? 400 : 500).json({ error: err.message });
+    res.status(err.statusCode || (err.message === 'NO_MORE_PATIENTS' ? 400 : 500)).json({ error: err.message });
   }
 };
 

@@ -168,9 +168,14 @@ export const toggleDoctorAvailability = (id, isAvailable) => {
   return api.patch(`/doctors/${id}/availability`, { isAvailable });
 };
 
-export const getDoctorQueueStatus = (doctorId, timestamp) => {
-  const url = timestamp ? `/doctors/${doctorId}/queue-status?t=${timestamp}` : `/doctors/${doctorId}/queue-status`;
-  return api.get(url);
+export const getDoctorQueueStatus = (doctorId, timestamp, clinicId) => {
+  return api.get(`/doctors/${doctorId}/queue-status`, {
+    params: {
+      ...(timestamp ? { t: timestamp } : {}),
+      ...(clinicId ? { clinicId } : {})
+    },
+    timeout: 15000
+  });
 };
 
 export const getAvailableDoctors = () => {

@@ -21,7 +21,7 @@ const DoctorRegister = () => {
   const [loading, setLoading] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [doctorId, setDoctorId] = useState('');
-  const { register } = useDoctorAuth();
+  const { register, completeAuthentication } = useDoctorAuth();
   const { showSuccess } = useNotification();
   const navigate = useNavigate();
 
@@ -69,8 +69,7 @@ const DoctorRegister = () => {
       const response = await verifyDoctorEmail(doctorId, code);
       
       if (response.data.token) {
-        localStorage.setItem('doctorToken', response.data.token);
-        localStorage.setItem('doctorUser', JSON.stringify(response.data.doctor));
+        completeAuthentication(response.data.token, response.data.doctor);
         navigate('/doctor/dashboard');
       } else if (response.data.status === 'pending_approval') {
         setShowVerification(false);

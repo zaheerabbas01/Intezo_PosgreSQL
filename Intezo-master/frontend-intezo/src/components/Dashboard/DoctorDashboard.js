@@ -1,11 +1,12 @@
 // src/components/Dashboard/DoctorDashboard.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { getDoctorQueueStatus as getClinicDoctorQueueStatus, updateCurrentNumber } from '../../api/clinicApi';
 import { getDoctorQueueStatus as getDoctorQueueStatusFromDoctorApi } from '../../api/doctorApi';
 import { useSocket } from '../../context/PusherContext';
 import { useDoctorAuth } from '../../context/DoctorAuthContext';
 import { useAuth } from '../../context/AuthContext';
+import { API_CONFIG } from '../../config/api';
 import CurrentQueue from './CurrentQueue';
 import UpcomingPatients from './UpcomingPatients';
 import QueueStats from './QueueStats';
@@ -24,20 +25,34 @@ const DoctorDashboard = () => {
   const [doctorData, setDoctorData] = useState(null);
   const [clinicData, setClinicData] = useState(null);
 
-  // Determine if we're in clinic or doctor context
-  const isClinicContext = !!currentUser;
-  const isDoctorContext = !!currentDoctor;
+  const authenticatedDoctor = currentDoctor?.doctor ||
+    (currentDoctor?._id || currentDoctor?.id ? currentDoctor : null);
+  const currentDoctorId = doctorId || authenticatedDoctor?._id || authenticatedDoctor?.id;
+  const selectedClinicId = clinicId || currentUser?.clinic?.id || currentUser?.clinic?._id;
+
+  // The route is authoritative when stale clinic and doctor sessions both exist.
+  const isDoctorContext = Boolean(clinicId || (!doctorId && authenticatedDoctor));
+  const isClinicContext = !isDoctorContext && !!currentUser;
 
   // Get appropriate token and API endpoints
   const getToken = () => {
-    if (isDoctorContext) return localStorage.getItem('doctorToken');
-    if (isClinicContext) return localStorage.getItem('clinicToken') || localStorage.getItem('token');
+    if (isDoctorContext) {
+      try {
+        const session = JSON.parse(localStorage.getItem('doctorUser') || '{}');
+        return session.token || localStorage.getItem('doctorToken');
+      } catch {
+        return localStorage.getItem('doctorToken');
+      }
+    }
+    if (isClinicContext) {
+      return currentUser?.token || localStorage.getItem('clinicToken') || localStorage.getItem('token');
+    }
     return localStorage.getItem('token');
   };
 
   const getApiEndpoint = (endpoint) => {
-    if (isDoctorContext) return `/api/doctors/queue/${endpoint}`;
-    return `/api/queue/${endpoint}`;
+    if (isDoctorContext) return `${API_CONFIG.baseUrl}/doctors/queue/${endpoint}`;
+    return `${API_CONFIG.baseUrl}/queues/${endpoint}`;
   };
   const [queueData, setQueueData] = useState({
     currentNumber: 0,
@@ -52,29 +67,36 @@ const DoctorDashboard = () => {
   const [itemsPerPage] = useState(8);
   const [skipRefresh, setSkipRefresh] = useState(0);
 
-  const fetchDoctorQueueData = async (isRefresh = false) => {
+  const fetchDoctorQueueData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
 
     try {
       setLoading(true);
       
-      const currentDoctorId = doctorId || currentDoctor?.doctor?._id;
       if (!currentDoctorId) {
-        throw new Error('Doctor ID not available');
+        throw new Error('Your doctor session is incomplete. Please sign out and sign in again.');
       }
       
       const timestamp = isRefresh ? Date.now() : undefined;
       
       // Use appropriate API based on context
       const response = isDoctorContext 
-        ? await getDoctorQueueStatusFromDoctorApi(currentDoctorId, timestamp)
-        : await getClinicDoctorQueueStatus(currentDoctorId, timestamp);
+        ? await getDoctorQueueStatusFromDoctorApi(currentDoctorId, timestamp, selectedClinicId)
+        : await getClinicDoctorQueueStatus(currentDoctorId, timestamp, selectedClinicId);
       
       setDoctorData(response.data.doctor);
       
-      if (clinicId && response.data.doctor?.clinics) {
-        const clinic = response.data.doctor.clinics.find(c => c.clinic.id === clinicId);
-        setClinicData(clinic);
+      if (selectedClinicId && authenticatedDoctor?.clinics) {
+        const clinic = authenticatedDoctor.clinics.find((association) => {
+          const associatedClinic = association.clinic;
+          const associatedClinicId = typeof associatedClinic === 'object'
+            ? associatedClinic.id || associatedClinic._id
+            : associatedClinic;
+          return String(associatedClinicId) === String(selectedClinicId);
+        });
+        setClinicData(clinic || (response.data.clinic ? { clinic: response.data.clinic } : null));
+      } else if (response.data.clinic) {
+        setClinicData({ clinic: response.data.clinic });
       }
       
       setQueueData({
@@ -90,16 +112,15 @@ const DoctorDashboard = () => {
       setUpcomingPage(1);
       setError('');
     } catch (err) {
-      setError('Failed to load doctor queue data');
+      setError(err.response?.data?.error || err.message || 'Failed to load doctor queue data');
       console.error('Error fetching doctor queue:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [authenticatedDoctor?.clinics, currentDoctorId, isDoctorContext, selectedClinicId]);
 
   useEffect(() => {
-    const currentDoctorId = doctorId || currentDoctor?.doctor?._id;
     if (currentDoctorId) {
       // Clear previous data when switching doctors
       setQueueData({
@@ -115,13 +136,15 @@ const DoctorDashboard = () => {
       setError('');
       
       fetchDoctorQueueData();
+    } else {
+      setLoading(false);
+      setError('Your doctor session is incomplete. Please sign out and sign in again.');
     }
-  }, [doctorId, currentDoctor, clinicId]);
+  }, [currentDoctorId, selectedClinicId, fetchDoctorQueueData]);
 
   // Add effect to handle page visibility changes
   useEffect(() => {
     const handleVisibilityChange = () => {
-      const currentDoctorId = doctorId || currentDoctor?.doctor?._id;
       if (!document.hidden && currentDoctorId) {
         fetchDoctorQueueData(true);
       }
@@ -129,7 +152,7 @@ const DoctorDashboard = () => {
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [doctorId, currentDoctor]);
+  }, [currentDoctorId, fetchDoctorQueueData]);
 
   // Memoized paginated upcoming patients
   const paginatedUpcoming = useMemo(() => {
@@ -148,12 +171,11 @@ const DoctorDashboard = () => {
     if (!queueData.canCallNext) return;
 
     try {
-      const currentDoctorId = doctorId || currentDoctor?.doctor?._id;
-      
       if (isClinicContext) {
         // Use clinic API
         const response = await updateCurrentNumber({
           doctorId: currentDoctorId,
+          clinicId: selectedClinicId,
           action: 'next'
         });
         
@@ -175,6 +197,7 @@ const DoctorDashboard = () => {
           },
           body: JSON.stringify({
             doctorId: currentDoctorId,
+            clinicId: selectedClinicId,
             action: 'next'
           })
         });
@@ -204,14 +227,13 @@ const DoctorDashboard = () => {
 
   const handleSkipPatient = async () => {
     try {
-      const currentDoctorId = doctorId || currentDoctor?.doctor?._id;
       const response = await fetch(getApiEndpoint('skip'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ doctorId: currentDoctorId })
+        body: JSON.stringify({ doctorId: currentDoctorId, clinicId: selectedClinicId })
       });
 
       if (!response.ok) {
@@ -246,7 +268,6 @@ const DoctorDashboard = () => {
   };
 
   useEffect(() => {
-    const currentDoctorId = doctorId || currentDoctor?.doctor?._id;
     if (!socket || !currentDoctorId) return;
 
     joinDoctor(currentDoctorId);
@@ -270,7 +291,7 @@ const DoctorDashboard = () => {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [socket, doctorId, currentDoctor, joinDoctor, subscribe]);
+  }, [socket, currentDoctorId, joinDoctor, subscribe]);
 
   if (loading) return (
     <div className="doctor-dashboard-container">
@@ -291,9 +312,9 @@ const DoctorDashboard = () => {
             <div>
               <h1>{clinicId ? 'Clinic Queue Management' : 'Doctor Dashboard'}</h1>
               <div className="doctor-info">
-                <span className="doctor-name">{doctorData?.name || currentDoctor?.doctor?.name || 'Loading...'}</span>
+                <span className="doctor-name">{doctorData?.name || authenticatedDoctor?.name || 'Doctor'}</span>
                 <span className="separator">•</span>
-                <span className="doctor-specialty">{doctorData?.specialty || currentDoctor?.doctor?.specialty || 'Specialty'}</span>
+                <span className="doctor-specialty">{doctorData?.specialty || authenticatedDoctor?.specialties?.[0] || 'Specialty'}</span>
                 {clinicId && clinicData && (
                   <>
                     <span className="separator">•</span>
@@ -372,7 +393,8 @@ const DoctorDashboard = () => {
             />
             
             <SkippedPatients
-              doctorId={doctorId || currentDoctor?.doctor?._id}
+              doctorId={currentDoctorId}
+              clinicId={selectedClinicId}
               refreshSignal={skipRefresh}
               onCallBack={handleCallBackPatient}
             />

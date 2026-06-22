@@ -5,7 +5,7 @@ import { useSocket } from '../../context/PusherContext';
 import { API_CONFIG } from '../../config/api';
 import './SkippedPatients.scss';
 
-const SkippedPatients = ({ doctorId, onCallBack, refreshSignal = 0 }) => {
+const SkippedPatients = ({ doctorId, clinicId, onCallBack, refreshSignal = 0 }) => {
   const { currentDoctor } = useDoctorAuth();
   const { currentUser } = useAuth();
   const { socket, joinClinic, joinDoctor, subscribe } = useSocket();
@@ -14,28 +14,36 @@ const SkippedPatients = ({ doctorId, onCallBack, refreshSignal = 0 }) => {
   const [error, setError] = useState('');
 
   // Determine context and get appropriate token/endpoint
-  const isClinicContext = !!currentUser;
-  const isDoctorContext = !!currentDoctor;
+  const isDoctorContext = Boolean(clinicId || (!currentUser && currentDoctor));
+  const isClinicContext = !isDoctorContext && !!currentUser;
 
-  const getToken = () => {
-    if (isDoctorContext) return localStorage.getItem('doctorUser') ? JSON.parse(localStorage.getItem('doctorUser')).token : null;
-    if (isClinicContext) return localStorage.getItem('token');
+  const getToken = React.useCallback(() => {
+    if (isDoctorContext) {
+      try {
+        const session = JSON.parse(localStorage.getItem('doctorUser') || '{}');
+        return session.token || localStorage.getItem('doctorToken');
+      } catch {
+        return localStorage.getItem('doctorToken');
+      }
+    }
+    if (isClinicContext) return currentUser?.token || localStorage.getItem('token');
     return localStorage.getItem('token');
-  };
+  }, [currentUser?.token, isClinicContext, isDoctorContext]);
 
   const API_BASE = API_CONFIG.baseUrl;
 
-  const getApiEndpoint = (endpoint) => {
+  const getApiEndpoint = React.useCallback((endpoint) => {
     if (isDoctorContext) return `${API_BASE}/doctors/queue/${endpoint}`;
     return `${API_BASE}/queues/${endpoint}`;
-  };
+  }, [API_BASE, isDoctorContext]);
 
   const fetchSkippedPatients = React.useCallback(async () => {
     try {
       setLoading(true);
       setError('');
       
-      const response = await fetch(getApiEndpoint(`skipped/${doctorId}`), {
+      const query = clinicId ? `?clinicId=${encodeURIComponent(clinicId)}` : '';
+      const response = await fetch(`${getApiEndpoint(`skipped/${doctorId}`)}${query}`, {
         headers: {
           'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
@@ -55,7 +63,7 @@ const SkippedPatients = ({ doctorId, onCallBack, refreshSignal = 0 }) => {
     } finally {
       setLoading(false);
     }
-  }, [doctorId, isClinicContext, isDoctorContext, API_BASE]);
+  }, [doctorId, clinicId, getApiEndpoint, getToken]);
 
   useEffect(() => {
     if (doctorId) {
@@ -90,7 +98,8 @@ const SkippedPatients = ({ doctorId, onCallBack, refreshSignal = 0 }) => {
         headers: {
           'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ clinicId })
       });
 
       if (!response.ok) {

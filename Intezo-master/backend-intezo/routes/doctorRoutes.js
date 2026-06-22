@@ -21,6 +21,7 @@ import {
   skipPatient,
   getSkippedPatients,
   callSkippedPatient,
+  serveSkippedPatient,
   updateCurrentNumber
 } from '../controllers/queue/queue.controller.js';
 import { authenticate, authorizeClinic, authenticateDoctor } from '../middleware/auth.js';
@@ -50,6 +51,7 @@ router.get('/:id/queue-status', authenticate, getDoctorQueueStatus);
 router.post('/queue/skip', authenticateDoctor, skipPatient);
 router.get('/queue/skipped/:doctorId', authenticateDoctor, getSkippedPatients);
 router.post('/queue/call-back/:queueId', authenticateDoctor, callSkippedPatient);
+router.post('/queue/serve-skipped/:queueId', authenticateDoctor, serveSkippedPatient);
 router.post('/queue/next', authenticateDoctor, updateCurrentNumber);
 
 // Protected routes with ID parameter (must be after specific routes)

@@ -12,7 +12,7 @@ const DoctorLogin = () => {
   const [loading, setLoading] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [doctorId, setDoctorId] = useState('');
-  const { login } = useDoctorAuth();
+  const { login, completeAuthentication } = useDoctorAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -76,11 +76,7 @@ const DoctorLogin = () => {
       const response = await verifyDoctorEmail(doctorId, code);
       
       if (response.data.token) {
-        const doctorUser = {
-          token: response.data.token,
-          doctor: response.data.doctor
-        };
-        localStorage.setItem('doctorUser', JSON.stringify(doctorUser));
+        completeAuthentication(response.data.token, response.data.doctor);
         navigate('/doctor/dashboard');
       }
     } catch (err) {

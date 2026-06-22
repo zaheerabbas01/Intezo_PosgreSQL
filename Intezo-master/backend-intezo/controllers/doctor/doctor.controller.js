@@ -94,8 +94,14 @@ export const toggleDoctorAvailability = async (req, res) => {
 export const getDoctorQueueStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    if (req.query.t) await doctorService.invalidateDoctorCache(id, req.query.clinicId);
-    const data = await queueService.getDoctorQueueState(id, req.query.clinicId);
+    if (req.doctor && String(req.doctor.id) !== String(id)) {
+      return res.status(403).json({ error: 'Doctors can only view their own queues' });
+    }
+
+    // A clinic token is always scoped to its own clinic, regardless of query input.
+    const clinicId = req.clinic?.id || req.query.clinicId;
+    if (req.query.t) await doctorService.invalidateDoctorCache(id, clinicId);
+    const data = await queueService.getDoctorQueueState(id, clinicId);
     res.json(data);
   } catch (err) {
     res.status(err.message === 'Doctor not found' ? 404 : 400).json({ error: err.message });

@@ -5,6 +5,7 @@ const API_BASE_URL = API_CONFIG.baseUrl;
 
 const doctorApi = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,8 +15,9 @@ const doctorApi = axios.create({
 doctorApi.interceptors.request.use((config) => {
   const doctorData = localStorage.getItem('doctorUser');
   if (doctorData) {
-    const { token } = JSON.parse(doctorData);
-    config.headers.Authorization = `Bearer ${token}`;
+    const session = JSON.parse(doctorData);
+    const token = session.token || localStorage.getItem('doctorToken');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -83,9 +85,13 @@ export const toggleDoctorAvailability = (clinicId, isAvailable) => {
   });
 };
 
-export const getDoctorQueueStatus = (doctorId, timestamp) => {
-  const url = timestamp ? `/doctors/${doctorId}/queue-status?t=${timestamp}` : `/doctors/${doctorId}/queue-status`;
-  return doctorApi.get(url);
+export const getDoctorQueueStatus = (doctorId, timestamp, clinicId) => {
+  return doctorApi.get(`/doctors/${doctorId}/queue-status`, {
+    params: {
+      ...(timestamp ? { t: timestamp } : {}),
+      ...(clinicId ? { clinicId } : {})
+    }
+  });
 };
 
 export default doctorApi;

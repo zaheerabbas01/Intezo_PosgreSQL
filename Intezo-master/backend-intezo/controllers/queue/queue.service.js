@@ -220,18 +220,21 @@ export const processCancellation = async (patientId, queueId = null) => {
 export const getDoctorQueueState = async (doctorId, clinicId = null) => {
   const doctor = await Doctor.findByPk(doctorId);
   if (!doctor) throw new Error('Doctor not found');
-  const assoc = clinicId ? doctor.clinics.find(c => c.clinic.toString() === clinicId.toString()) : doctor.clinics.find(c => c.isActive) || doctor.clinics[0];
+  const assoc = clinicId
+    ? doctor.clinics.find(c => c.clinic.toString() === clinicId.toString() && c.isActive !== false)
+    : doctor.clinics.find(c => c.isActive) || doctor.clinics[0];
   if (!assoc) throw new Error('Doctor not associated with any clinic');
   const targetClinicId = assoc.clinic;
   const redisKey = `doctor:${doctorId}:clinic:${targetClinicId}:current`;
-  const [currentNumberRaw, waitingPatients] = await Promise.all([
+  const [currentNumberRaw, waitingPatients, clinic] = await Promise.all([
     redisClient.isOpen ? redisClient.get(redisKey) : '0',
-    Queue.findAll({ where: { doctorId, clinicId: targetClinicId, status: 'waiting' }, order: [['number', 'ASC']], limit: 10, include: [{ association: 'patient', attributes: ['name', 'phone'] }] })
+    Queue.findAll({ where: { doctorId, clinicId: targetClinicId, status: 'waiting' }, order: [['number', 'ASC']], limit: 10, include: [{ association: 'patient', attributes: ['name', 'phone'] }] }),
+    Clinic.findByPk(targetClinicId, { attributes: ['id', 'name'] })
   ]);
   const current = parseInt(currentNumberRaw || 0);
   const upcoming = waitingPatients.filter(q => q.number > current);
   const currentQueue = current > 0 ? waitingPatients.find(q => q.number === current) : null;
-  return { doctor: { name: doctor.name, specialty: doctor.specialties?.[0] || 'General Practitioner', isAvailable: assoc.isAvailable }, clinicId: targetClinicId, currentNumber: current, currentQueueId: currentQueue?.id || null, upcoming, totalWaiting: upcoming.length, hasNextPatient: upcoming.length > 0 };
+  return { doctor: { name: doctor.name, specialty: doctor.specialties?.[0] || 'General Practitioner', isAvailable: assoc.isAvailable }, clinic: clinic ? { id: clinic.id, name: clinic.name } : null, clinicId: targetClinicId, currentNumber: current, currentQueueId: currentQueue?.id || null, upcoming, totalWaiting: upcoming.length, hasNextPatient: upcoming.length > 0 };
 };
 
 export const getPublicClinicDoctors = async (clinicId) => {
