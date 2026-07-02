@@ -16,7 +16,7 @@ export const getQueueBroadcastPayload = async (clinicId, doctorId = null) => {
   const currentNumber = parseInt(currentVal || 0);
   const upcoming = queueEntries.filter(q => q.number > currentNumber).map(q => ({ number: q.number, patientName: q.patientName || q.patient?.name || 'Unknown', isManualEntry: !!q.manualEntry }));
   const currentQueueEntry = currentNumber > 0 ? queueEntries.find(q => q.number === currentNumber) : null;
-  return { currentNumber, currentQueueId: currentQueueEntry?.id || null, upcoming, totalWaiting: upcoming.length, avgWaitTime: clinic?.averageProcessTime || 15, hasNextPatient: upcoming.length > 0, hasCurrentPatient: currentNumber > 0, canCallNext: currentNumber > 0 || upcoming.length > 0, clinicStatus: { isOpen: clinic?.isOpen || false, operatingHours: clinic?.operatingHours || {} }, isDoctorQueue: !!doctorId, timestamp: new Date().toISOString() };
+  return { currentNumber, currentQueueId: currentQueueEntry?.id || null, upcoming, totalWaiting: upcoming.length, avgWaitTime: clinic?.averageProcessTime || 15, hasNextPatient: upcoming.length > 0, hasCurrentPatient: !!currentQueueEntry, canCallNext: !!currentQueueEntry || upcoming.length > 0, clinicStatus: { isOpen: clinic?.isOpen || false, operatingHours: clinic?.operatingHours || {} }, isDoctorQueue: !!doctorId, timestamp: new Date().toISOString() };
 };
 
 export const generateNextNumber = async (clinicId, doctorId) => {
@@ -90,12 +90,13 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
     const currentServing = parseInt((await redisClient.get(redisKey)) || 0);
     let newNumber;
     let servedCurrentPatient = false;
+    let nextPatient = null;
 
     if (action === 'next' || action === 'skip') {
       if (action === 'skip' && currentServing === 0) {
         throw new Error('NO_CURRENT_PATIENT');
       }
-      const nextPatient = await Queue.findOne({ where: { clinicId, doctorId, number: { [Op.gt]: currentServing }, status: 'waiting' }, order: [['number', 'ASC']], transaction: t });
+      nextPatient = await Queue.findOne({ where: { clinicId, doctorId, number: { [Op.gt]: currentServing }, status: 'waiting' }, order: [['number', 'ASC']], transaction: t });
       newNumber = resolveAdvanceNumber({
         action,
         currentServing,
@@ -116,7 +117,8 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
         action,
         currentServing,
         newNumber,
-        hasCurrentQueue: !!previousQueue
+        hasCurrentQueue: !!previousQueue,
+        hasFollowingPatient: !!nextPatient
       });
 
       if (previousQueue && (action === 'skip' || shouldServeCurrent)) {
@@ -157,8 +159,12 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
       servedQueue: servedCurrentPatient ? servedQueue : null,
       doctor,
       hasNextPatient: !!hasMoreAfter,
-      hasCurrentPatient: newNumber > 0,
-      queueCompleted: newNumber === 0
+      hasCurrentPatient: action === 'next' || action === 'skip'
+        ? !!nextPatient
+        : newNumber > 0,
+      queueCompleted: (action === 'next' || action === 'skip') &&
+        currentServing > 0 &&
+        !nextPatient
     };
   });
 };
@@ -171,7 +177,7 @@ export const getPublicQueueStatus = async (clinicId, doctorId) => {
   ]);
   const upcoming = queueData.filter(q => q.number > current).map(q => ({ id: q.id, number: q.number, patientName: q.patientName || q.patient?.name || 'Unknown' }));
   const currentQueueEntry = current > 0 ? queueData.find(q => q.number === current) : null;
-  return { current, currentQueueId: currentQueueEntry?.id || null, upcoming, avgWaitTime: clinic?.averageProcessTime || 15, totalWaiting: upcoming.length, hasNext: upcoming.length > 0, hasNextPatient: upcoming.length > 0, hasCurrentPatient: current > 0, canCallNext: current > 0 || upcoming.length > 0 };
+  return { current, currentQueueId: currentQueueEntry?.id || null, upcoming, avgWaitTime: clinic?.averageProcessTime || 15, totalWaiting: upcoming.length, hasNext: upcoming.length > 0, hasNextPatient: upcoming.length > 0, hasCurrentPatient: !!currentQueueEntry, canCallNext: !!currentQueueEntry || upcoming.length > 0 };
 };
 
 export const updateQueueStatus = async (queueId, newStatus, patientId = null) => {
@@ -251,7 +257,7 @@ export const getDoctorQueueState = async (doctorId, clinicId = null) => {
   const current = parseInt(currentNumberRaw || 0);
   const upcoming = waitingPatients.filter(q => q.number > current);
   const currentQueue = current > 0 ? waitingPatients.find(q => q.number === current) : null;
-  return { doctor: { name: doctor.name, specialty: doctor.specialties?.[0] || 'General Practitioner', isAvailable: assoc.isAvailable }, clinic: clinic ? { id: clinic.id, name: clinic.name } : null, clinicId: targetClinicId, currentNumber: current, currentQueueId: currentQueue?.id || null, upcoming, totalWaiting: upcoming.length, hasNextPatient: upcoming.length > 0, hasCurrentPatient: current > 0, canCallNext: current > 0 || upcoming.length > 0 };
+  return { doctor: { name: doctor.name, specialty: doctor.specialties?.[0] || 'General Practitioner', isAvailable: assoc.isAvailable }, clinic: clinic ? { id: clinic.id, name: clinic.name } : null, clinicId: targetClinicId, currentNumber: current, currentQueueId: currentQueue?.id || null, upcoming, totalWaiting: upcoming.length, hasNextPatient: upcoming.length > 0, hasCurrentPatient: !!currentQueue, canCallNext: !!currentQueue || upcoming.length > 0 };
 };
 
 export const getPublicClinicDoctors = async (clinicId) => {

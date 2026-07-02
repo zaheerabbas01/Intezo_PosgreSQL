@@ -8,7 +8,7 @@ export const resolveAdvanceNumber = ({ action, currentServing, nextPatientNumber
   }
 
   if (currentServing > 0) {
-    return 0;
+    return currentServing;
   }
 
   throw new Error('NO_MORE_PATIENTS');
@@ -18,10 +18,14 @@ export const shouldServeCurrentPatient = ({
   action,
   currentServing,
   newNumber,
-  hasCurrentQueue
+  hasCurrentQueue,
+  hasFollowingPatient
 }) => (
   action !== 'skip' &&
   hasCurrentQueue &&
   currentServing > 0 &&
-  Number(newNumber) !== currentServing
+  (
+    Number(newNumber) !== currentServing ||
+    (action === 'next' && !hasFollowingPatient)
+  )
 );

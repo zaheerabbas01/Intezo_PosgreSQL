@@ -23,6 +23,12 @@ const router = express.Router();
 router.get('/public/:clinicId/:doctorId', async (req, res) => {
   try {
     const { clinicId, doctorId } = req.params;
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
     
     // Basic validation for UUID or numeric IDs
     if (!clinicId || !doctorId) {

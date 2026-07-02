@@ -94,6 +94,12 @@ export const toggleDoctorAvailability = async (req, res) => {
 export const getDoctorQueueStatus = async (req, res) => {
   try {
     const { id } = req.params;
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
     if (req.doctor && String(req.doctor.id) !== String(id)) {
       return res.status(403).json({ error: 'Doctors can only view their own queues' });
     }

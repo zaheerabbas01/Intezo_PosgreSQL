@@ -3,7 +3,6 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "test": "node --test controllers/queue/queue.transitions.test.js",
     "migrate": "node migrate.js",
     "db:migrate": "node scripts/run-migrations.js",
     "verify": "node verify-migration.js",

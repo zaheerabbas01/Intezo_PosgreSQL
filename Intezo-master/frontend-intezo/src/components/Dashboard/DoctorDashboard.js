@@ -89,7 +89,8 @@ const DoctorDashboard = () => {
         throw new Error('Your doctor session is incomplete. Please sign out and sign in again.');
       }
       
-      const timestamp = isRefresh ? Date.now() : undefined;
+      // Queue state is live data and must never reuse a cached response.
+      const timestamp = Date.now();
       
       // Use appropriate API based on context
       const response = isDoctorContext 

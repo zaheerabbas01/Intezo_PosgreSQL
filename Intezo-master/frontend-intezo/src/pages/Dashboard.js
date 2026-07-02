@@ -143,8 +143,8 @@ const Dashboard = () => {
     if (isRefresh) setRefreshing(true);
 
     try {
-      // Add cache-busting parameter when refreshing
-      const timestamp = isRefresh ? Date.now() : undefined;
+      // Queue state is live data and must never reuse a cached response.
+      const timestamp = Date.now();
       console.log('Calling getPublicDoctorQueue with:', { 
         clinicId: currentUser.clinic.id, 
         doctorId: selectedDoctor.id, 

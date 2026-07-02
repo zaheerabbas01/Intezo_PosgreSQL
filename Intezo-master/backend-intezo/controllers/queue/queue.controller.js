@@ -256,8 +256,8 @@ export const getPublicQueueStatus = async (clinicId, doctorId) => {
     totalWaiting: upcoming.length,
     hasNext: upcoming.length > 0,
     hasNextPatient: upcoming.length > 0,
-    hasCurrentPatient: current > 0,
-    canCallNext: current > 0 || upcoming.length > 0
+    hasCurrentPatient: !!currentQueueEntry,
+    canCallNext: !!currentQueueEntry || upcoming.length > 0
   };
 };
 
