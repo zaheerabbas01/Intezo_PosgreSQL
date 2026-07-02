@@ -7,6 +7,7 @@ import { useSocket } from '../../context/PusherContext';
 import { useDoctorAuth } from '../../context/DoctorAuthContext';
 import { useAuth } from '../../context/AuthContext';
 import { API_CONFIG } from '../../config/api';
+import { loadQueueSnapshot, saveQueueSnapshot } from '../../utils/queueSnapshot';
 import CurrentQueue from './CurrentQueue';
 import UpcomingPatients from './UpcomingPatients';
 import QueueStats from './QueueStats';
@@ -18,17 +19,20 @@ const DoctorDashboard = () => {
   const { currentDoctor } = useDoctorAuth();
   const { currentUser } = useAuth();
   const { socket, joinDoctor, subscribe } = useSocket();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [doctorData, setDoctorData] = useState(null);
-  const [clinicData, setClinicData] = useState(null);
 
   const authenticatedDoctor = currentDoctor?.doctor ||
     (currentDoctor?._id || currentDoctor?.id ? currentDoctor : null);
   const currentDoctorId = doctorId || authenticatedDoctor?._id || authenticatedDoctor?.id;
   const selectedClinicId = clinicId || currentUser?.clinic?.id || currentUser?.clinic?._id;
+  const initialQueueSnapshot = loadQueueSnapshot(selectedClinicId, currentDoctorId);
+  const [loading, setLoading] = useState(!initialQueueSnapshot);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(
+    initialQueueSnapshot ? new Date(initialQueueSnapshot.savedAt) : null
+  );
+  const [doctorData, setDoctorData] = useState(null);
+  const [clinicData, setClinicData] = useState(null);
 
   // The route is authoritative when stale clinic and doctor sessions both exist.
   const isDoctorContext = Boolean(clinicId || (!doctorId && authenticatedDoctor));
@@ -54,7 +58,7 @@ const DoctorDashboard = () => {
     if (isDoctorContext) return `${API_CONFIG.baseUrl}/doctors/queue/${endpoint}`;
     return `${API_CONFIG.baseUrl}/queues/${endpoint}`;
   };
-  const [queueData, setQueueData] = useState({
+  const [queueData, setQueueData] = useState(initialQueueSnapshot?.data || {
     currentNumber: 0,
     currentQueueId: null,
     upcoming: [],
@@ -67,12 +71,20 @@ const DoctorDashboard = () => {
   const [itemsPerPage] = useState(8);
   const [skipRefresh, setSkipRefresh] = useState(0);
 
+  const updateQueueData = useCallback((valueOrUpdater) => {
+    setQueueData(previous => {
+      const next = typeof valueOrUpdater === 'function'
+        ? valueOrUpdater(previous)
+        : valueOrUpdater;
+      saveQueueSnapshot(selectedClinicId, currentDoctorId, next);
+      return next;
+    });
+  }, [currentDoctorId, selectedClinicId]);
+
   const fetchDoctorQueueData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
 
     try {
-      setLoading(true);
-      
       if (!currentDoctorId) {
         throw new Error('Your doctor session is incomplete. Please sign out and sign in again.');
       }
@@ -99,13 +111,14 @@ const DoctorDashboard = () => {
         setClinicData({ clinic: response.data.clinic });
       }
       
-      setQueueData({
+      updateQueueData({
         currentNumber: response.data.currentNumber || 0,
         currentQueueId: response.data.currentQueueId || null,
         upcoming: response.data.upcoming || [],
         totalWaiting: response.data.totalWaiting || 0,
         avgWaitTime: 15,
-        canCallNext: (response.data.upcoming?.length || 0) > 0,
+        canCallNext: response.data.canCallNext ??
+          Boolean(response.data.currentNumber || response.data.upcoming?.length),
         completedToday: response.data.completedToday || 0
       });
       setLastUpdated(new Date());
@@ -118,19 +131,18 @@ const DoctorDashboard = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [authenticatedDoctor?.clinics, currentDoctorId, isDoctorContext, selectedClinicId]);
+  }, [authenticatedDoctor?.clinics, currentDoctorId, isDoctorContext, selectedClinicId, updateQueueData]);
 
   useEffect(() => {
     if (currentDoctorId) {
-      // Clear previous data when switching doctors
-      setQueueData({
-        currentNumber: 0,
-        upcoming: [],
-        totalWaiting: 0,
-        avgWaitTime: 15,
-        canCallNext: true,
-        completedToday: 0
-      });
+      const snapshot = loadQueueSnapshot(selectedClinicId, currentDoctorId);
+      if (snapshot) {
+        setQueueData(snapshot.data);
+        setLastUpdated(new Date(snapshot.savedAt));
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setDoctorData(null);
       setClinicData(null);
       setError('');
@@ -165,7 +177,7 @@ const DoctorDashboard = () => {
   };
 
   // Updated handleNextPatient function to work in both contexts
-  const isLastPatient = queueData.totalWaiting === 1;
+  const isFinishingCurrent = queueData.currentNumber > 0 && queueData.totalWaiting === 0;
 
   const handleNextPatient = async () => {
     if (!queueData.canCallNext) return;
@@ -179,14 +191,22 @@ const DoctorDashboard = () => {
           action: 'next'
         });
         
-        setQueueData(prev => ({
-          ...prev,
-          currentNumber: response.data.currentNumber,
-          completedToday: prev.completedToday + 1,
-          upcoming: prev.upcoming.filter(p => p.number !== response.data.currentNumber),
-          totalWaiting: Math.max(0, prev.totalWaiting - 1),
-          canCallNext: response.data.hasNextPatient
-        }));
+        updateQueueData(prev => {
+          const calledPatient = prev.upcoming.find(p => p.number === response.data.currentNumber);
+          return {
+            ...prev,
+            currentNumber: response.data.currentNumber,
+            currentQueueId: response.data.currentNumber > 0 ? calledPatient?.id || null : null,
+            completedToday: prev.completedToday + (response.data.servedPatient ? 1 : 0),
+            upcoming: response.data.currentNumber > 0
+              ? prev.upcoming.filter(p => p.number !== response.data.currentNumber)
+              : prev.upcoming,
+            totalWaiting: response.data.currentNumber > 0
+              ? Math.max(0, prev.totalWaiting - 1)
+              : prev.totalWaiting,
+            canCallNext: Boolean(response.data.hasCurrentPatient || response.data.hasNextPatient)
+          };
+        });
       } else {
         // Use doctor API
         const response = await fetch(getApiEndpoint('next'), {
@@ -208,14 +228,22 @@ const DoctorDashboard = () => {
         }
 
         const data = await response.json();
-        setQueueData(prev => ({
-          ...prev,
-          currentNumber: data.currentNumber,
-          completedToday: prev.completedToday + 1,
-          upcoming: prev.upcoming.filter(p => p.number !== data.currentNumber),
-          totalWaiting: Math.max(0, prev.totalWaiting - 1),
-          canCallNext: data.hasNextPatient
-        }));
+        updateQueueData(prev => {
+          const calledPatient = prev.upcoming.find(p => p.number === data.currentNumber);
+          return {
+            ...prev,
+            currentNumber: data.currentNumber,
+            currentQueueId: data.currentNumber > 0 ? calledPatient?.id || null : null,
+            completedToday: prev.completedToday + (data.servedPatient ? 1 : 0),
+            upcoming: data.currentNumber > 0
+              ? prev.upcoming.filter(p => p.number !== data.currentNumber)
+              : prev.upcoming,
+            totalWaiting: data.currentNumber > 0
+              ? Math.max(0, prev.totalWaiting - 1)
+              : prev.totalWaiting,
+            canCallNext: Boolean(data.hasCurrentPatient || data.hasNextPatient)
+          };
+        });
       }
       
       setLastUpdated(new Date());
@@ -242,12 +270,19 @@ const DoctorDashboard = () => {
       }
 
       const data = await response.json();
-      setQueueData(prev => ({
+      updateQueueData(prev => ({
         ...prev,
         currentNumber: data.currentNumber,
-        upcoming: prev.upcoming.filter(p => p.number !== data.currentNumber),
-        totalWaiting: Math.max(0, prev.totalWaiting - 1),
-        canCallNext: data.hasNextPatient
+        currentQueueId: data.currentNumber > 0
+          ? prev.upcoming.find(p => p.number === data.currentNumber)?.id || null
+          : null,
+        upcoming: data.currentNumber > 0
+          ? prev.upcoming.filter(p => p.number !== data.currentNumber)
+          : prev.upcoming,
+        totalWaiting: data.currentNumber > 0
+          ? Math.max(0, prev.totalWaiting - 1)
+          : prev.totalWaiting,
+        canCallNext: Boolean(data.hasCurrentPatient || data.hasNextPatient)
       }));
       setLastUpdated(new Date());
       setError('');
@@ -276,13 +311,18 @@ const DoctorDashboard = () => {
     const unsubscribe = subscribe('queue_updated', (data) => {
       console.log('📢 Doctor queue update received:', data);
       if (data.doctorId === currentDoctorId) {
-        setQueueData(prev => ({
+        updateQueueData(prev => ({
           ...prev,
           currentNumber: data.currentNumber !== undefined ? data.currentNumber : prev.currentNumber,
           currentQueueId: data.currentQueueId !== undefined ? data.currentQueueId : prev.currentQueueId,
           upcoming: data.upcoming || prev.upcoming,
           totalWaiting: data.totalWaiting !== undefined ? data.totalWaiting : prev.totalWaiting,
-          canCallNext: data.hasNextPatient !== undefined ? data.hasNextPatient : prev.canCallNext
+          canCallNext: data.canCallNext !== undefined
+            ? data.canCallNext
+            : Boolean(
+                (data.currentNumber !== undefined ? data.currentNumber : prev.currentNumber) ||
+                (data.hasNextPatient !== undefined ? data.hasNextPatient : prev.canCallNext)
+              )
         }));
         setLastUpdated(new Date());
       }
@@ -291,7 +331,7 @@ const DoctorDashboard = () => {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [socket, currentDoctorId, joinDoctor, subscribe]);
+  }, [socket, currentDoctorId, joinDoctor, subscribe, updateQueueData]);
 
   if (loading) return (
     <div className="doctor-dashboard-container">
@@ -368,7 +408,7 @@ const DoctorDashboard = () => {
                 canCallNext={queueData.canCallNext}
                 totalWaiting={queueData.totalWaiting}
                 nextPatientNumber={queueData.upcoming.length > 0 ? queueData.upcoming[0]?.number : null}
-                isLastPatient={isLastPatient}
+                isFinishingCurrent={isFinishingCurrent}
               />
             </div>
 

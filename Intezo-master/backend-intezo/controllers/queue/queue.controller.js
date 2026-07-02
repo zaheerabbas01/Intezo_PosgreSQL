@@ -155,9 +155,9 @@ export const skipPatient = async (req, res) => {
   try {
     const { doctorId } = req.body;
     const clinicId = resolveQueueClinicId(req, doctorId);
-    const { newNumber, hasNextPatient } = await queueService.advanceQueue({ doctorId, clinicId, action: 'skip' });
+    const { newNumber, hasNextPatient, hasCurrentPatient, queueCompleted } = await queueService.advanceQueue({ doctorId, clinicId, action: 'skip' });
     setImmediate(() => triggerQueueUpdate(clinicId, doctorId));
-    res.json({ success: true, currentNumber: newNumber, hasNextPatient });
+    res.json({ success: true, currentNumber: newNumber, hasNextPatient, hasCurrentPatient, queueCompleted });
   } catch (err) {
     const status = err.statusCode || (['NO_MORE_PATIENTS', 'NO_CURRENT_PATIENT'].includes(err.message) ? 400 : 500);
     res.status(status).json({ error: err.message });
@@ -219,7 +219,7 @@ export const updateCurrentNumber = async (req, res) => {
   try {
     const { doctorId, action, newNumber: specificNumber } = req.body;
     const clinicId = resolveQueueClinicId(req, doctorId);
-    const { newNumber, servedQueue, doctor, hasNextPatient } = await queueService.advanceQueue({ doctorId, clinicId, action, specificNumber });
+    const { newNumber, servedQueue, doctor, hasNextPatient, hasCurrentPatient, queueCompleted } = await queueService.advanceQueue({ doctorId, clinicId, action, specificNumber });
     const clinic = req.clinic || await Clinic.findByPk(clinicId, { attributes: ['id', 'name'] });
     const clinicName = clinic?.name || 'Clinic';
 
@@ -234,7 +234,7 @@ export const updateCurrentNumber = async (req, res) => {
       });
     });
 
-    res.json({ success: true, currentNumber: newNumber, hasNextPatient });
+    res.json({ success: true, currentNumber: newNumber, hasNextPatient, hasCurrentPatient, queueCompleted, servedPatient: !!servedQueue });
   } catch (err) {
     res.status(err.statusCode || (err.message === 'NO_MORE_PATIENTS' ? 400 : 500)).json({ error: err.message });
   }
@@ -247,7 +247,18 @@ export const getPublicQueueStatus = async (clinicId, doctorId) => {
     Clinic.findByPk(clinicId, { attributes: ['averageProcessTime'] })
   ]);
   const upcoming = queueData.filter(q => q.number > current).map(q => ({ id: q.id, number: q.number, patientName: q.patientName || q.patient?.name || 'Unknown' }));
-  return { current, upcoming, avgWaitTime: clinic?.averageProcessTime || 15, totalWaiting: upcoming.length, hasNext: upcoming.length > 0 };
+  const currentQueueEntry = current > 0 ? queueData.find(q => q.number === current) : null;
+  return {
+    current,
+    currentQueueId: currentQueueEntry?.id || null,
+    upcoming,
+    avgWaitTime: clinic?.averageProcessTime || 15,
+    totalWaiting: upcoming.length,
+    hasNext: upcoming.length > 0,
+    hasNextPatient: upcoming.length > 0,
+    hasCurrentPatient: current > 0,
+    canCallNext: current > 0 || upcoming.length > 0
+  };
 };
 
 export const updateQueueStatus = async (queueId, newStatus, patientId = null) => {

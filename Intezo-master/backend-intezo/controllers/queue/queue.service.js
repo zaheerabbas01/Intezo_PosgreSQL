@@ -4,6 +4,7 @@ import redisClient from '../../config/redis.js';
 import { Op } from 'sequelize';
 import FCMService from '../../services/fcmService.js';
 import { calculateEstimatedWaitTime } from '../../utils/waitTimeCalculator.js';
+import { resolveAdvanceNumber, shouldServeCurrentPatient } from './queue.transitions.js';
 
 export const getQueueBroadcastPayload = async (clinicId, doctorId = null) => {
   const redisKey = doctorId ? `doctor:${doctorId}:clinic:${clinicId}:current` : `clinic:${clinicId}:current`;
@@ -15,7 +16,7 @@ export const getQueueBroadcastPayload = async (clinicId, doctorId = null) => {
   const currentNumber = parseInt(currentVal || 0);
   const upcoming = queueEntries.filter(q => q.number > currentNumber).map(q => ({ number: q.number, patientName: q.patientName || q.patient?.name || 'Unknown', isManualEntry: !!q.manualEntry }));
   const currentQueueEntry = currentNumber > 0 ? queueEntries.find(q => q.number === currentNumber) : null;
-  return { currentNumber, currentQueueId: currentQueueEntry?.id || null, upcoming, totalWaiting: upcoming.length, avgWaitTime: clinic?.averageProcessTime || 15, hasNextPatient: upcoming.length > 0, clinicStatus: { isOpen: clinic?.isOpen || false, operatingHours: clinic?.operatingHours || {} }, isDoctorQueue: !!doctorId, timestamp: new Date().toISOString() };
+  return { currentNumber, currentQueueId: currentQueueEntry?.id || null, upcoming, totalWaiting: upcoming.length, avgWaitTime: clinic?.averageProcessTime || 15, hasNextPatient: upcoming.length > 0, hasCurrentPatient: currentNumber > 0, canCallNext: currentNumber > 0 || upcoming.length > 0, clinicStatus: { isOpen: clinic?.isOpen || false, operatingHours: clinic?.operatingHours || {} }, isDoctorQueue: !!doctorId, timestamp: new Date().toISOString() };
 };
 
 export const generateNextNumber = async (clinicId, doctorId) => {
@@ -88,17 +89,20 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
     const redisKey = `doctor:${doctorId}:clinic:${clinicId}:current`;
     const currentServing = parseInt((await redisClient.get(redisKey)) || 0);
     let newNumber;
+    let servedCurrentPatient = false;
 
     if (action === 'next' || action === 'skip') {
+      if (action === 'skip' && currentServing === 0) {
+        throw new Error('NO_CURRENT_PATIENT');
+      }
       const nextPatient = await Queue.findOne({ where: { clinicId, doctorId, number: { [Op.gt]: currentServing }, status: 'waiting' }, order: [['number', 'ASC']], transaction: t });
-      if (!nextPatient) throw new Error('NO_MORE_PATIENTS');
-      newNumber = nextPatient.number;
+      newNumber = resolveAdvanceNumber({
+        action,
+        currentServing,
+        nextPatientNumber: nextPatient?.number
+      });
     } else {
       newNumber = specificNumber;
-    }
-
-    if (action === 'skip' && currentServing === 0) {
-      throw new Error('NO_CURRENT_PATIENT');
     }
 
     // Mark the previously serving patient as served or skipped
@@ -108,7 +112,14 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
         throw new Error('NO_CURRENT_PATIENT');
       }
 
-      if (previousQueue) {
+      const shouldServeCurrent = shouldServeCurrentPatient({
+        action,
+        currentServing,
+        newNumber,
+        hasCurrentQueue: !!previousQueue
+      });
+
+      if (previousQueue && (action === 'skip' || shouldServeCurrent)) {
         if (action === 'skip') {
           await previousQueue.update({ status: 'skipped', skippedAt: new Date() }, { transaction: t });
           if (previousQueue.patient) {
@@ -118,21 +129,20 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
           }
         } else {
           await markPatientServed(previousQueue, t);
+          servedCurrentPatient = true;
         }
       }
     }
 
-    // Check if this is the last patient — if so, mark them served immediately too
-    const hasMoreAfter = await Queue.findOne({ where: { clinicId, doctorId, number: { [Op.gt]: newNumber }, status: 'waiting' }, transaction: t });
-    if (!hasMoreAfter) {
-      const lastQueue = await Queue.findOne({ where: { clinicId, doctorId, number: newNumber, status: 'waiting' }, include: [{ association: 'patient' }], transaction: t });
-      if (lastQueue) await markPatientServed(lastQueue, t);
-    }
+    // Determine whether another patient remains after the newly called patient.
+    const hasMoreAfter = newNumber > 0
+      ? await Queue.findOne({ where: { clinicId, doctorId, number: { [Op.gt]: newNumber }, status: 'waiting' }, transaction: t })
+      : null;
 
     if (redisClient.isOpen) await redisClient.set(redisKey, newNumber);
 
     const doctor = await Doctor.findByPk(doctorId, { transaction: t });
-    if (doctor) {
+    if (doctor && servedCurrentPatient) {
       const clinics = [...doctor.clinics];
       const idx = clinics.findIndex(c => c.clinic.toString() === clinicId.toString());
       if (idx !== -1) { clinics[idx].patientsServed = (clinics[idx].patientsServed || 0) + 1; await doctor.update({ clinics }, { transaction: t }); }
@@ -142,7 +152,14 @@ export const advanceQueue = async ({ doctorId, clinicId, action, specificNumber 
       ? await Queue.findOne({ where: { clinicId, doctorId, number: currentServing }, include: [{ association: 'patient' }], transaction: t })
       : null;
 
-    return { newNumber, servedQueue, doctor, hasNextPatient: !!hasMoreAfter };
+    return {
+      newNumber,
+      servedQueue: servedCurrentPatient ? servedQueue : null,
+      doctor,
+      hasNextPatient: !!hasMoreAfter,
+      hasCurrentPatient: newNumber > 0,
+      queueCompleted: newNumber === 0
+    };
   });
 };
 
@@ -154,7 +171,7 @@ export const getPublicQueueStatus = async (clinicId, doctorId) => {
   ]);
   const upcoming = queueData.filter(q => q.number > current).map(q => ({ id: q.id, number: q.number, patientName: q.patientName || q.patient?.name || 'Unknown' }));
   const currentQueueEntry = current > 0 ? queueData.find(q => q.number === current) : null;
-  return { current, currentQueueId: currentQueueEntry?.id || null, upcoming, avgWaitTime: clinic?.averageProcessTime || 15, totalWaiting: upcoming.length, hasNext: upcoming.length > 0 };
+  return { current, currentQueueId: currentQueueEntry?.id || null, upcoming, avgWaitTime: clinic?.averageProcessTime || 15, totalWaiting: upcoming.length, hasNext: upcoming.length > 0, hasNextPatient: upcoming.length > 0, hasCurrentPatient: current > 0, canCallNext: current > 0 || upcoming.length > 0 };
 };
 
 export const updateQueueStatus = async (queueId, newStatus, patientId = null) => {
@@ -234,7 +251,7 @@ export const getDoctorQueueState = async (doctorId, clinicId = null) => {
   const current = parseInt(currentNumberRaw || 0);
   const upcoming = waitingPatients.filter(q => q.number > current);
   const currentQueue = current > 0 ? waitingPatients.find(q => q.number === current) : null;
-  return { doctor: { name: doctor.name, specialty: doctor.specialties?.[0] || 'General Practitioner', isAvailable: assoc.isAvailable }, clinic: clinic ? { id: clinic.id, name: clinic.name } : null, clinicId: targetClinicId, currentNumber: current, currentQueueId: currentQueue?.id || null, upcoming, totalWaiting: upcoming.length, hasNextPatient: upcoming.length > 0 };
+  return { doctor: { name: doctor.name, specialty: doctor.specialties?.[0] || 'General Practitioner', isAvailable: assoc.isAvailable }, clinic: clinic ? { id: clinic.id, name: clinic.name } : null, clinicId: targetClinicId, currentNumber: current, currentQueueId: currentQueue?.id || null, upcoming, totalWaiting: upcoming.length, hasNextPatient: upcoming.length > 0, hasCurrentPatient: current > 0, canCallNext: current > 0 || upcoming.length > 0 };
 };
 
 export const getPublicClinicDoctors = async (clinicId) => {
