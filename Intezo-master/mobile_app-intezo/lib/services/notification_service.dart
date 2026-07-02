@@ -289,30 +289,44 @@ class NotificationService {
     return notifications.any((n) => json.decode(n)['id'] == doctorId);
   }
 
-  // Enhanced methods that sync with backend
-  Future<void> addClinicNotificationWithSync(
+  // Enhanced methods that sync with backend.
+  // Returns true only when the backend confirms the change, so callers can
+  // give honest feedback. Local preference is kept in sync with the server.
+  Future<bool> addClinicNotificationWithSync(
     String clinicId,
     String clinicName,
   ) async {
-    await addClinicNotification(clinicId, clinicName);
-    await ApiService.enableClinicNotification(clinicId);
+    final synced = await ApiService.enableClinicNotification(clinicId);
+    if (synced) {
+      await addClinicNotification(clinicId, clinicName);
+    }
+    return synced;
   }
 
-  Future<void> removeClinicNotificationWithSync(String clinicId) async {
-    await removeClinicNotification(clinicId);
-    await ApiService.disableClinicNotification(clinicId);
+  Future<bool> removeClinicNotificationWithSync(String clinicId) async {
+    final synced = await ApiService.disableClinicNotification(clinicId);
+    if (synced) {
+      await removeClinicNotification(clinicId);
+    }
+    return synced;
   }
 
-  Future<void> addDoctorNotificationWithSync(
+  Future<bool> addDoctorNotificationWithSync(
     String doctorId,
     String doctorName,
   ) async {
-    await addDoctorNotification(doctorId, doctorName);
-    await ApiService.enableDoctorNotification(doctorId);
+    final synced = await ApiService.enableDoctorNotification(doctorId);
+    if (synced) {
+      await addDoctorNotification(doctorId, doctorName);
+    }
+    return synced;
   }
 
-  Future<void> removeDoctorNotificationWithSync(String doctorId) async {
-    await removeDoctorNotification(doctorId);
-    await ApiService.disableDoctorNotification(doctorId);
+  Future<bool> removeDoctorNotificationWithSync(String doctorId) async {
+    final synced = await ApiService.disableDoctorNotification(doctorId);
+    if (synced) {
+      await removeDoctorNotification(doctorId);
+    }
+    return synced;
   }
 }

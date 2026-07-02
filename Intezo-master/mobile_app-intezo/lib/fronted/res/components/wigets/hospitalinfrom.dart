@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../providers/clinic_provider.dart';
 import '../../../../providers/theme_provider.dart';
 import '../../../../config/api_config.dart';
@@ -30,6 +31,8 @@ class _HospitalInformState extends State<HospitalInform> {
   bool _hasActiveBooking = false;
   int _selectedDoctorIndex = -1; // -1 means no doctor selected
   bool _isClinicOpen = true; // Track real-time clinic status
+  bool _notifyWhenOpenEnabled = false; // Track "notify me when open" state
+  bool _notifyWhenOpenBusy = false; // Prevent double taps while syncing
 
   Map<String, dynamic>? _queueData;
   List<Map<String, dynamic>> _doctors = [];
@@ -49,7 +52,108 @@ class _HospitalInformState extends State<HospitalInform> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadClinicDataOptimized();
       _checkActiveBooking();
+      _loadNotifyWhenOpenState();
     });
+  }
+
+  Future<void> _loadNotifyWhenOpenState() async {
+    final clinicId = widget.clinic['id'];
+
+    // Server is the source of truth so the toggle defaults to off unless the
+    // patient is actually subscribed on the backend. Fall back to the local
+    // preference only if the request fails (e.g. offline / not logged in).
+    final prefs = await ApiService.getNotificationPreferences();
+    bool enabled;
+    if (prefs != null) {
+      final subscribed = (prefs['clinicNotifications'] as List? ?? [])
+          .map((e) => e.toString())
+          .contains(clinicId.toString());
+      enabled = subscribed;
+      // Reconcile any stale local flag with the server truth.
+      if (subscribed) {
+        await NotificationService().addClinicNotification(
+          clinicId,
+          widget.clinic['name'] ?? 'Clinic',
+        );
+      } else {
+        await NotificationService().removeClinicNotification(clinicId);
+      }
+    } else {
+      enabled = await NotificationService().isClinicNotificationEnabled(
+        clinicId,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _notifyWhenOpenEnabled = enabled;
+      });
+    }
+  }
+
+  // Toggle "Notify Me When Open" with honest feedback:
+  // requires login, only claims success when the backend confirms.
+  Future<void> _toggleNotifyWhenOpen() async {
+    if (_notifyWhenOpenBusy) return;
+
+    final patientId = await SecureStorageService.readPatientId();
+    final token = await SecureStorageService.readToken();
+    if (patientId == null || token == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to get notified when this clinic opens'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _notifyWhenOpenBusy = true);
+
+    final clinicId = widget.clinic['id'];
+    final clinicName = widget.clinic['name'] ?? 'Clinic';
+    final wasEnabled = _notifyWhenOpenEnabled;
+
+    bool success;
+    if (wasEnabled) {
+      success = await NotificationService().removeClinicNotificationWithSync(
+        clinicId,
+      );
+    } else {
+      success = await NotificationService().addClinicNotificationWithSync(
+        clinicId,
+        clinicName,
+      );
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _notifyWhenOpenBusy = false;
+      if (success) _notifyWhenOpenEnabled = !wasEnabled;
+    });
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            wasEnabled
+                ? 'You will no longer be notified about $clinicName'
+                : 'You will be notified when $clinicName opens',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update notifications. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // Remove the call from didChangeDependencies since we're handling it in initState
@@ -1089,6 +1193,38 @@ class _HospitalInformState extends State<HospitalInform> {
                             ),
                           ),
                         ),
+                        const Spacer(),
+                        // Show clinic location on a map
+                        if (_hasClinicLocation ||
+                            (widget.clinic['address']?.toString().trim() ?? '')
+                                .isNotEmpty)
+                          OutlinedButton.icon(
+                            onPressed: _openMap,
+                            icon: Icon(
+                              Icons.map,
+                              size: 18,
+                              color: context.primaryColor,
+                            ),
+                            label: Text(
+                              'Map',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: context.primaryColor,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              side: BorderSide(color: context.primaryColor),
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -1104,39 +1240,35 @@ class _HospitalInformState extends State<HospitalInform> {
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 20),
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      await NotificationService().addClinicNotificationWithSync(
-                        widget.clinic['id'],
-                        widget.clinic['name'] ?? 'Clinic',
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'You will be notified when ${widget.clinic['name']} opens',
+                  onPressed: _notifyWhenOpenBusy ? null : _toggleNotifyWhenOpen,
+                  icon: _notifyWhenOpenBusy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
                           ),
-                          backgroundColor: Colors.green,
+                        )
+                      : Icon(
+                          _notifyWhenOpenEnabled
+                              ? Icons.notifications_off
+                              : Icons.notifications_active,
+                          color: Colors.white,
                         ),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to enable notifications'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  icon: Icon(Icons.notifications_active, color: Colors.white),
                   label: Text(
-                    'Notify Me When Open',
-                    style: TextStyle(
+                    _notifyWhenOpenEnabled
+                        ? 'Cancel Open Notification'
+                        : 'Notify Me When Open',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: _notifyWhenOpenEnabled
+                        ? Colors.grey.shade600
+                        : Colors.orange,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -1427,6 +1559,71 @@ class _HospitalInformState extends State<HospitalInform> {
         ),
       ),
     );
+  }
+
+  // Parse a coordinate that may arrive as num or String from the API.
+  double? _parseCoordinate(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  bool get _hasClinicLocation =>
+      _parseCoordinate(widget.clinic['latitude']) != null &&
+      _parseCoordinate(widget.clinic['longitude']) != null;
+
+  // Open the clinic location in the device map app (Google/Apple Maps).
+  // Uses coordinates when available, otherwise falls back to the address.
+  Future<void> _openMap() async {
+    final lat = _parseCoordinate(widget.clinic['latitude']);
+    final lng = _parseCoordinate(widget.clinic['longitude']);
+    final address = widget.clinic['address'] as String?;
+
+    late final Uri mapUri;
+    if (lat != null && lng != null) {
+      mapUri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+      );
+    } else if (address != null && address.trim().isNotEmpty) {
+      mapUri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
+      );
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location is not available for this clinic'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final launched = await launchUrl(
+        mapUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the map'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error opening map: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the map'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildQueueInfoRow(String label, String value) {

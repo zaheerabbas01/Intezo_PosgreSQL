@@ -125,13 +125,13 @@ router.delete('/notifications/doctor/:doctorId', async (req, res) => {
 
 router.get('/notifications/preferences', async (req, res) => {
   try {
+    // clinicNotifications / doctorNotifications are plain UUID[] columns, not
+    // associations, so return them directly (no include).
     const patient = await Patient.findByPk(req.patient.id, {
-      include: [
-        { model: Clinic, as: 'clinicNotifications', attributes: ['name'] },
-        { model: Doctor, as: 'doctorNotifications', attributes: ['name', 'specialty'] }
-      ]
+      attributes: ['clinicNotifications', 'doctorNotifications']
     });
-    
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
     res.json({
       clinicNotifications: patient.clinicNotifications || [],
       doctorNotifications: patient.doctorNotifications || []

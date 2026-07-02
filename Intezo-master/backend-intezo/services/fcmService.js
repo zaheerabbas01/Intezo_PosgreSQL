@@ -80,85 +80,76 @@ class FCMService {
 
   async sendClinicOpenNotification(clinicId, clinicName) {
     try {
-      // Deduplication check
-      const notificationKey = `clinic_open_${clinicId}`;
-      // if (this.isRecentNotification(notificationKey, 300000)) { // 5 minutes
-      //   console.log(`Skipping duplicate clinic open notification for ${clinicName}`);
-      //   return;
-      // }
-      
       this.initialize();
-      // Only get patients who have enabled notifications for this clinic
-      const patients = await Patient.findAll({ 
+
+      const targetId = String(clinicId);
+      // Only fetch patients who subscribed to this clinic and have a token.
+      const patients = await Patient.findAll({
         where: {
           fcmToken: { [Op.ne]: null },
-          clinicNotifications: { [Op.contains]: [clinicId] }
-        }
+          clinicNotifications: { [Op.contains]: [clinicId] },
+        },
+        attributes: ['id', 'name', 'fcmToken', 'clinicNotifications'],
       });
-      
+
       if (patients.length === 0) {
         console.log(`No patients with enabled notifications for clinic ${clinicName}`);
         return;
       }
-      
-      const tokens = patients.map(p => p.fcmToken).filter(Boolean);
-      console.log(`Sending clinic open notification to ${tokens.length} patients with enabled notifications`);
+      console.log(`Sending clinic open notification to ${patients.length} patient(s)`);
 
-      const message = {
-        tokens,
-        notification: {
-          title: 'Clinic Now Open!',
-          body: `${clinicName} is now open for appointments\nTap to visit clinic`,
-        },
-        data: {
-          type: 'clinic_open',
-          clinicId: clinicId.toString(),
-          clinicName: clinicName.toString(),
-        },
-        android: {
-          priority: 'high',
-          notification: {
-            channelId: 'clinic_channel',
-            priority: 'high',
-            defaultSound: true,
-            defaultVibrateTimings: true,
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              alert: {
-                title: 'Clinic Now Open!',
-                body: `${clinicName} is now open for appointments\nTap to visit clinic`,
-              },
-              sound: 'default',
-              badge: 1,
-            },
-          },
-        },
+      const title = 'Clinic Now Open!';
+      const body = `${clinicName} is now open for appointments\nTap to visit clinic`;
+      const data = {
+        type: 'clinic_open',
+        clinicId: targetId,
+        clinicName: String(clinicName),
       };
 
-      const response = await admin.messaging().sendEachForMulticast(message);
-      console.log(`Clinic open notification sent: ${response.successCount} successful, ${response.failureCount} failed`);
-      
-      // Auto-remove clinic notification preference for all patients who received the notification
-      const patientIds = patients.map(p => p.id);
+      // Send per-token with the same send() call used by the working
+      // queue/served notifications (instead of sendEachForMulticast).
+      let successCount = 0;
+      let failureCount = 0;
+      const notified = [];
       for (const patient of patients) {
-        let clinicNotifications = patient.clinicNotifications || [];
-        clinicNotifications = clinicNotifications.filter(id => id !== clinicId);
-        await patient.update({ clinicNotifications });
-      }
-      console.log(`Removed clinic notification preference for ${patients.length} patients`);
-      
-      // Mark as sent
-      this.markNotificationSent(notificationKey);
-      
-      if (response.failureCount > 0) {
-        response.responses.forEach((resp, index) => {
-          if (!resp.success) {
-            console.error(`Failed to send to token ${tokens[index]}: ${resp.error?.message}`);
+        try {
+          await admin.messaging().send({
+            token: patient.fcmToken,
+            notification: { title, body },
+            data,
+            android: {
+              priority: 'high',
+              notification: {
+                channelId: 'clinic_channel',
+                priority: 'high',
+                defaultSound: true,
+                defaultVibrateTimings: true,
+              },
+            },
+            apns: {
+              payload: {
+                aps: { alert: { title, body }, sound: 'default', badge: 1 },
+              },
+            },
+          });
+          successCount++;
+          notified.push(patient);
+        } catch (err) {
+          failureCount++;
+          console.error(`Failed to send clinic open to patient ${patient.id}: ${err.message}`);
+          if (err.code === 'messaging/registration-token-not-registered') {
+            await patient.update({ fcmToken: null }).catch(() => {});
           }
-        });
+        }
+      }
+      console.log(`Clinic open notification sent: ${successCount} successful, ${failureCount} failed`);
+
+      // Auto-remove the subscription only for patients we actually notified.
+      for (const patient of notified) {
+        const clinicNotifications = (patient.clinicNotifications || []).filter(
+          (id) => String(id) !== targetId
+        );
+        await patient.update({ clinicNotifications }).catch(() => {});
       }
     } catch (error) {
       console.error('Error sending clinic open notification:', error);
@@ -175,68 +166,76 @@ class FCMService {
       }
     
       this.initialize();
-      // Only get patients who have enabled notifications for this doctor
-      const patients = await Patient.findAll({ 
+
+      const targetId = String(doctorId);
+      // Only fetch patients who subscribed to this doctor and have a token.
+      const patients = await Patient.findAll({
         where: {
           fcmToken: { [Op.ne]: null },
-          doctorNotifications: { [Op.contains]: [doctorId] }
-        }
+          doctorNotifications: { [Op.contains]: [doctorId] },
+        },
+        attributes: ['id', 'name', 'fcmToken', 'doctorNotifications'],
       });
 
       if (patients.length === 0) {
         console.log(`No patients with enabled notifications for Dr. ${doctorName}`);
         return;
       }
+      console.log(`Sending doctor available notification to ${patients.length} patient(s)`);
 
-      const tokens = patients.map(p => p.fcmToken).filter(Boolean);
-      console.log(`Sending doctor available notification to ${tokens.length} patients with enabled notifications`);
-
-      const message = {
-        tokens,
-        notification: {
-          title: 'Doctor Now Available!',
-          body: `Dr. ${doctorName} is now available at ${clinicName}\nTap to view doctor details`,
-        },
-        data: {
-          type: 'doctor_available',
-          doctorId: doctorId.toString(),
-          doctorName: doctorName.toString(),
-          clinicName: clinicName.toString(),
-        },
-        android: {
-          priority: 'high',
-          notification: {
-            channelId: 'doctor_channel',
-            priority: 'high',
-            defaultSound: true,
-            defaultVibrateTimings: true,
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              alert: {
-                title: 'Doctor Now Available!',
-                body: `Dr. ${doctorName} is now available at ${clinicName}\nTap to view doctor details`,
-              },
-              sound: 'default',
-              badge: 1,
-            },
-          },
-        },
+      const title = 'Doctor Now Available!';
+      const body = `Dr. ${doctorName} is now available at ${clinicName}\nTap to view doctor details`;
+      const data = {
+        type: 'doctor_available',
+        doctorId: targetId,
+        doctorName: String(doctorName),
+        clinicName: String(clinicName),
       };
 
-      const response = await admin.messaging().sendEachForMulticast(message);
-      console.log(`Doctor available notification sent: ${response.successCount} successful, ${response.failureCount} failed`);
-      
-      // Auto-remove doctor notification preference for all patients who received the notification
+      let successCount = 0;
+      let failureCount = 0;
+      const notified = [];
       for (const patient of patients) {
-        let doctorNotifications = patient.doctorNotifications || [];
-        doctorNotifications = doctorNotifications.filter(id => id !== doctorId);
-        await patient.update({ doctorNotifications });
+        try {
+          await admin.messaging().send({
+            token: patient.fcmToken,
+            notification: { title, body },
+            data,
+            android: {
+              priority: 'high',
+              notification: {
+                channelId: 'doctor_channel',
+                priority: 'high',
+                defaultSound: true,
+                defaultVibrateTimings: true,
+              },
+            },
+            apns: {
+              payload: {
+                aps: { alert: { title, body }, sound: 'default', badge: 1 },
+              },
+            },
+          });
+          successCount++;
+          notified.push(patient);
+        } catch (err) {
+          failureCount++;
+          console.error(`Failed to send doctor available to patient ${patient.id}: ${err.message}`);
+          if (err.code === 'messaging/registration-token-not-registered') {
+            await patient.update({ fcmToken: null }).catch(() => {});
+          }
+        }
       }
-      console.log(`Removed doctor notification preference for ${patients.length} patients`);
-      
+      console.log(`Doctor available notification sent: ${successCount} successful, ${failureCount} failed`);
+
+      // Auto-remove the subscription only for patients we actually notified.
+      for (const patient of notified) {
+        const doctorNotifications = (patient.doctorNotifications || []).filter(
+          (id) => String(id) !== targetId
+        );
+        await patient.update({ doctorNotifications }).catch(() => {});
+      }
+
       this.markNotificationSent(notificationKey);
     } catch (error) {
       console.error('Error sending doctor available notification:', error);

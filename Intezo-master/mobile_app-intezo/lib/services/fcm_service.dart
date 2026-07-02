@@ -62,6 +62,11 @@ class FCMService {
         _handleNotificationTap(initialMessage);
       }
 
+      // Proactively register the current token so already-logged-in users
+      // (returning from a previous session) are reachable even when
+      // onTokenRefresh does not fire this launch.
+      await registerToken();
+
       print('✅ FCM Service initialized successfully');
     } catch (e) {
       print('❌ FCM Service initialization failed: $e');
