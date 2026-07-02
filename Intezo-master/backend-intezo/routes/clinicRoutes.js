@@ -19,7 +19,8 @@ import {
   checkOperationHours,
   verifyRedisCounters,
   addPatientToQueue,
-  getPatientHistoryForClinic
+  getPatientHistoryForClinic,
+  updateClinicLocation
 } from '../controllers/clinic/clinic.controller.js';
 import { authenticate, authorizeClinic } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
@@ -74,6 +75,7 @@ router.use(authenticate, authorizeClinic);
 router.get('/status', getClinicStatus);
 router.get('/profile', getClinic);
 router.put('/profile', updateClinic);
+router.put('/location', updateClinicLocation);
 router.delete('/profile', deleteClinic);
 router.get('/analytics', getQueueAnalytics);
 router.post('/toggle-status', toggleClinicStatus);

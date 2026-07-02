@@ -30,6 +30,8 @@
 	<string>Intezo uses the camera so you can attach payment receipts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Intezo uses your photo library so you can attach payment receipts.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Intezo uses your location while searching to show nearby clinics first.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

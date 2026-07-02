@@ -1,0 +1,125 @@
+.clinic-location-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.clinic-location-modal {
+  width: min(760px, 100%);
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.35);
+}
+
+.clinic-location-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px 18px;
+
+  h2 {
+    margin: 0 0 6px;
+    color: #0f172a;
+    font-size: 22px;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    line-height: 1.5;
+  }
+}
+
+.clinic-location-later {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.clinic-location-map {
+  width: 100%;
+  height: 390px;
+  background: #e2e8f0;
+}
+
+.clinic-location-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px 8px;
+
+  span {
+    color: #64748b;
+    font-size: 13px;
+  }
+}
+
+.clinic-location-detect,
+.clinic-location-save {
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.clinic-location-detect {
+  padding: 10px 14px;
+  background: #e0e7ff;
+  color: #1d4ed8;
+}
+
+.clinic-location-error {
+  margin: 8px 24px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.clinic-location-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 24px 22px;
+}
+
+.clinic-location-save {
+  padding: 12px 18px;
+  background: #2563eb;
+  color: #fff;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+@media (max-width: 640px) {
+  .clinic-location-overlay {
+    padding: 0;
+  }
+
+  .clinic-location-modal {
+    min-height: 100%;
+    border-radius: 0;
+  }
+
+  .clinic-location-header,
+  .clinic-location-controls {
+    flex-direction: column;
+  }
+
+  .clinic-location-map {
+    height: 52vh;
+  }
+}

@@ -98,6 +98,10 @@ export const updateClinicProfile = (data) => {
   return api.put('/clinics/profile', data);
 };
 
+export const updateClinicLocation = (latitude, longitude) => {
+  return api.put('/clinics/location', { latitude, longitude });
+};
+
 export const toggleClinicStatus = () => {
   return api.post('/clinics/toggle-status');
 };

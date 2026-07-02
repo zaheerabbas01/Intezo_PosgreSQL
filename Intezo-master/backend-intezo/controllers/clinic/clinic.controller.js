@@ -5,9 +5,36 @@ import { Clinic, Queue, Doctor } from '../../models/index.js';
 import { Op } from 'sequelize';
 import { cleanupFailedUpload, deleteProfilePhotoAsset, persistProfilePhoto } from '../../middleware/upload.js';
 
+const toRadians = value => value * (Math.PI / 180);
+
+const distanceInKilometers = (fromLatitude, fromLongitude, toLatitude, toLongitude) => {
+  const earthRadiusKm = 6371;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const latitudeA = toRadians(fromLatitude);
+  const latitudeB = toRadians(toLatitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(latitudeA) * Math.cos(latitudeB) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
+const parseCoordinate = (value, minimum, maximum) => {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum
+    ? parsed
+    : null;
+};
+
 export const getClinic = async (req, res) => {
   try {
-    const clinic = await Clinic.findByPk(req.clinic.id);
+    const clinic = await Clinic.findByPk(req.clinic.id, {
+      attributes: {
+        exclude: ['password', 'verificationCode', 'verificationCodeExpires']
+      }
+    });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     res.json(clinic);
   } catch (err) {
@@ -27,6 +54,45 @@ export const updateClinic = async (req, res) => {
 
     await clinic.update(req.body);
     res.json(clinic);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const updateClinicLocation = async (req, res) => {
+  try {
+    const latitude = parseCoordinate(req.body.latitude, -90, 90);
+    const longitude = parseCoordinate(req.body.longitude, -180, 180);
+    if (latitude === null || longitude === null) {
+      return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+    }
+
+    const clinic = await Clinic.findByPk(req.clinic.id);
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    await clinic.update({
+      latitude,
+      longitude,
+      locationUpdatedAt: new Date()
+    });
+
+    const redisClient = (await import('../../config/redis.js')).default;
+    if (redisClient.isOpen) {
+      await Promise.all([
+        redisClient.del('clinics:public:list'),
+        redisClient.del(`clinic:complete:${clinic.id}`)
+      ]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Clinic map location updated',
+      location: {
+        latitude: clinic.latitude,
+        longitude: clinic.longitude,
+        locationUpdatedAt: clinic.locationUpdatedAt
+      }
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -150,18 +216,59 @@ export const getClinicSummary = async (req, res) => {
 
 export const getClinicsPublic = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const cacheKey = 'clinics:public:list';
     const redisClient = (await import('../../config/redis.js')).default;
+    let clinics = null;
 
     if (redisClient.isOpen) {
       const cached = await redisClient.get(cacheKey);
-      if (cached) return res.json(JSON.parse(cached));
+      if (cached) clinics = JSON.parse(cached);
     }
 
-    const clinics = await Clinic.findAll({ attributes: ['id', 'name', 'phone', 'address', 'services', 'operatingHours', 'isOpen', 'profilePhoto'], raw: true });
+    if (!clinics) {
+      clinics = await Clinic.findAll({
+        attributes: [
+          'id', 'name', 'phone', 'address', 'services', 'operatingHours',
+          'isOpen', 'profilePhoto', 'latitude', 'longitude'
+        ],
+        raw: true
+      });
 
-    if (redisClient.isOpen) await redisClient.setEx(cacheKey, 300, JSON.stringify(clinics));
-    res.json(clinics);
+      if (redisClient.isOpen) {
+        await redisClient.setEx(cacheKey, 300, JSON.stringify(clinics));
+      }
+    }
+
+    const latitude = parseCoordinate(req.query.latitude, -90, 90);
+    const longitude = parseCoordinate(req.query.longitude, -180, 180);
+    const requestedLocation = req.query.latitude !== undefined || req.query.longitude !== undefined;
+    if (requestedLocation && (latitude === null || longitude === null)) {
+      return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+    }
+
+    if (latitude === null || longitude === null) return res.json(clinics);
+
+    const requestedRadius = Number(req.query.radiusKm);
+    const radiusKm = Number.isFinite(requestedRadius)
+      ? Math.min(Math.max(requestedRadius, 1), 200)
+      : 50;
+
+    const nearbyClinics = clinics
+      .filter(clinic => clinic.latitude !== null && clinic.longitude !== null)
+      .map(clinic => ({
+        ...clinic,
+        distanceKm: Number(distanceInKilometers(
+          latitude,
+          longitude,
+          Number(clinic.latitude),
+          Number(clinic.longitude)
+        ).toFixed(1))
+      }))
+      .filter(clinic => clinic.distanceKm <= radiusKm)
+      .sort((clinicA, clinicB) => clinicA.distanceKm - clinicB.distanceKm);
+
+    res.json(nearbyClinics);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

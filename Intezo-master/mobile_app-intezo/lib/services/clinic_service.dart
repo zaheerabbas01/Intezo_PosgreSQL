@@ -69,6 +69,26 @@ class ClinicService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> getNearbyClinics({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 50,
+  }) async {
+    final response = await ApiService.get(
+      'clinics/public',
+      isPublic: true,
+      queryParams: {
+        'latitude': latitude,
+        'longitude': longitude,
+        'radiusKm': radiusKm,
+        't': DateTime.now().millisecondsSinceEpoch,
+      },
+    );
+
+    if (response is! List) return [];
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   // lib/services/clinic_service.dart - Update getClinicStatus method
   static Future<Map<String, dynamic>> getClinicStatus(String clinicId) async {
     try {

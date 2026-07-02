@@ -29,6 +29,17 @@ const Clinic = sequelize.define('Clinic', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  latitude: {
+    type: DataTypes.DOUBLE,
+    validate: { min: -90, max: 90 }
+  },
+  longitude: {
+    type: DataTypes.DOUBLE,
+    validate: { min: -180, max: 180 }
+  },
+  locationUpdatedAt: {
+    type: DataTypes.DATE
+  },
   profilePhoto: {
     type: DataTypes.STRING
   },

@@ -25,6 +25,7 @@ import AdminPrivateRoute from './components/Auth/AdminPrivateRoute';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import { NotificationProvider } from './context/NotificationContext';
+import ClinicLocationPrompt from './components/ClinicLocationPrompt';
 
 function App() {
   return (
@@ -34,7 +35,8 @@ function App() {
           <DoctorAuthProvider>
             <AdminAuthProvider>
               <SocketProvider>
-            <Routes>
+                <ClinicLocationPrompt />
+                <Routes>
               {/* Main landing page */}
               <Route path="/" element={<MainPage />} />
               
@@ -129,7 +131,7 @@ function App() {
               </Route>
               
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                </Routes>
               </SocketProvider>
             </AdminAuthProvider>
           </DoctorAuthProvider>

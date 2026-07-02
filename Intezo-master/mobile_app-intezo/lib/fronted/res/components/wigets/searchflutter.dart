@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../providers/theme_provider.dart';
 import '../../../../providers/clinic_provider.dart';
 import '../../../../services/clinic_service.dart';
+import '../../../../services/location_service.dart';
 import 'hospitalinfrom.dart';
 
 class MainPageState extends StatefulWidget {
@@ -18,6 +19,10 @@ class _MainPageStateState extends State<MainPageState> {
   List<Map<String, dynamic>> _allClinics = [];
   List<Map<String, dynamic>> _searchResults = [];
   bool _isLoading = false;
+  bool _usingNearbyLocation = false;
+  bool _requiresAppSettings = false;
+  bool _requiresLocationSettings = false;
+  String? _locationMessage;
   Timer? _debounceTimer;
 
   @override
@@ -36,16 +41,78 @@ class _MainPageStateState extends State<MainPageState> {
   Future<void> _loadClinics() async {
     setState(() => _isLoading = true);
     try {
-      final clinics = await ClinicService.getClinics();
+      final position = await PatientLocationService.getCurrentPosition();
+      final clinics = await ClinicService.getNearbyClinics(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      if (!mounted) return;
       setState(() {
         _allClinics = clinics;
         _searchResults = clinics;
+        _usingNearbyLocation = true;
+        _requiresAppSettings = false;
+        _requiresLocationSettings = false;
+        _locationMessage = clinics.isEmpty
+            ? 'No mapped clinics were found within 50 km.'
+            : 'Showing the nearest clinics within 50 km.';
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
+    } on LocationAccessException catch (locationError) {
+      await _loadAllClinics(
+        message: locationError.message,
+        requiresAppSettings: locationError.requiresAppSettings,
+        requiresLocationSettings: locationError.requiresLocationSettings,
+      );
+    } catch (_) {
+      await _loadAllClinics(
+        message: 'Nearby search is unavailable right now. Showing all clinics.',
+      );
     }
   }
+
+  Future<void> _loadAllClinics({
+    String? message,
+    bool requiresAppSettings = false,
+    bool requiresLocationSettings = false,
+  }) async {
+    try {
+      final clinics = await ClinicService.getClinics(forceRefresh: true);
+      if (!mounted) return;
+      setState(() {
+        _allClinics = clinics;
+        _searchResults = clinics;
+        _usingNearbyLocation = false;
+        _requiresAppSettings = requiresAppSettings;
+        _requiresLocationSettings = requiresLocationSettings;
+        _locationMessage = message ?? 'Showing all clinics.';
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _locationMessage = 'Clinics could not be loaded. Please try again.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _retryLocation() async {
+    if (_requiresAppSettings) {
+      await PatientLocationService.openAppSettings();
+      return;
+    }
+    if (_requiresLocationSettings) {
+      await PatientLocationService.openLocationSettings();
+      return;
+    }
+    await _loadClinics();
+  }
+
+  Future<void> _showAllClinics() => _loadAllClinics(
+    message:
+        'Showing all clinics. Only mapped clinics can be ranked by distance.',
+  );
 
   void _searchClinics(String query) {
     if (query.isEmpty) {
@@ -85,6 +152,13 @@ class _MainPageStateState extends State<MainPageState> {
         backgroundColor: context.cardColor,
         foregroundColor: context.textColor,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Refresh nearby clinics',
+            onPressed: _isLoading ? null : _loadClinics,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       backgroundColor: context.backgroundColor,
       body: Column(
@@ -94,7 +168,7 @@ class _MainPageStateState extends State<MainPageState> {
             color: context.cardColor,
             child: TextField(
               controller: _searchController,
-              autofocus: true,
+              autofocus: false,
               decoration: InputDecoration(
                 hintText: 'Search by name, location, or specialty...',
                 hintStyle: TextStyle(color: context.subtextColor),
@@ -125,6 +199,50 @@ class _MainPageStateState extends State<MainPageState> {
               onChanged: _onSearchChanged,
             ),
           ),
+          if (_locationMessage != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _usingNearbyLocation
+                    ? Colors.green.withOpacity(0.1)
+                    : Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _usingNearbyLocation
+                        ? Icons.near_me
+                        : Icons.location_off_outlined,
+                    size: 20,
+                    color: _usingNearbyLocation ? Colors.green : Colors.orange,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _locationMessage!,
+                      style: TextStyle(color: context.textColor, fontSize: 13),
+                    ),
+                  ),
+                  if (_usingNearbyLocation && _allClinics.isEmpty)
+                    TextButton(
+                      onPressed: _isLoading ? null : _showAllClinics,
+                      child: const Text('Show all'),
+                    )
+                  else if (!_usingNearbyLocation)
+                    TextButton(
+                      onPressed: _isLoading ? null : _retryLocation,
+                      child: Text(
+                        _requiresAppSettings || _requiresLocationSettings
+                            ? 'Settings'
+                            : 'Enable',
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -229,6 +347,28 @@ class _MainPageStateState extends State<MainPageState> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               const SizedBox(height: 4),
+                              if (clinic['distanceKm'] != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.near_me,
+                                        size: 14,
+                                        color: context.primaryColor,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${clinic['distanceKm']} km away',
+                                        style: TextStyle(
+                                          color: context.primaryColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               Row(
                                 children: [
                                   Container(
