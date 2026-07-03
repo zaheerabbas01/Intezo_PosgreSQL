@@ -5,12 +5,24 @@
   --cream: #fbf8f2;
   --orange: #ef6235;
   --rule: #cfc5b8;
+  --accent: #a33d20;
+  --panel: #211914;
   min-height: 100vh;
   width: 100%;
   overflow-x: clip;
   background: var(--paper);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
+
+  &[data-theme="dark"] {
+    --ink: #ece5da;
+    --muted: #a49a8f;
+    --paper: #15110d;
+    --cream: #1d1813;
+    --rule: #38312a;
+    --accent: #ff8a5f;
+    --panel: #241f19;
+  }
 
   * {
     border-radius: 0;
@@ -36,7 +48,7 @@
 
   .landing-label {
     margin: 0;
-    color: #a33d20;
+    color: var(--accent);
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.13em;
@@ -80,14 +92,35 @@
       font-weight: 600;
       text-decoration: none;
 
-      &:last-child {
+      &:last-of-type {
         padding-bottom: 4px;
         border-bottom: 1px solid var(--ink);
       }
 
       &:hover {
-        color: #a33d20;
+        color: var(--accent);
       }
+    }
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    transition: background 0.15s ease, color 0.15s ease;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      background: var(--ink);
+      color: var(--paper);
     }
   }
 
@@ -112,6 +145,7 @@
       letter-spacing: -0.065em;
       line-height: 0.92;
       padding: 0.25em 0.35em;
+      color: #211914;
       background-color: #ef6235;
     }
   }
@@ -154,11 +188,11 @@
 
   .landing-action--dark {
     padding: 0 18px;
-    background: var(--ink);
+    background: var(--panel);
     color: #fff !important;
 
     &:hover {
-      background: #a33d20;
+      background: var(--accent);
     }
   }
 
@@ -194,7 +228,7 @@
     }
 
     dt {
-      color: #a33d20;
+      color: var(--accent);
       font-weight: 700;
     }
 
@@ -204,7 +238,7 @@
   }
 
   .queue-board {
-    background: var(--ink);
+    background: var(--panel);
     color: #fff;
   }
 
@@ -354,7 +388,7 @@
     }
 
     time {
-      color: #a33d20;
+      color: var(--accent);
       font-family: Georgia, "Times New Roman", serif;
       font-size: 2rem;
     }
@@ -416,7 +450,7 @@
     }
 
     article > span {
-      color: #a33d20;
+      color: var(--accent);
       font-size: 0.68rem;
       font-weight: 700;
     }
@@ -453,7 +487,7 @@
       }
 
       &:hover {
-        color: #a33d20;
+        color: var(--accent);
       }
     }
   }
@@ -590,7 +624,7 @@
     }
 
     .landing-nav__links {
-      gap: 0;
+      gap: 16px;
 
       a:first-child,
       a:nth-child(2) {
