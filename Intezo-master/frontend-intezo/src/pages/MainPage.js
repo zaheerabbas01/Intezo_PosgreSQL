@@ -89,7 +89,7 @@ const MainPage = () => {
                   Register your clinic <Arrow />
                 </Link>
                 <button type="button" onClick={downloadApp} disabled={preparingDownload}>
-                  {preparingDownload ? 'Preparing the app…' : 'Download the patient app'} <span>↓</span>
+                  {preparingDownload ? 'Preparing…' : 'Download App'} <span>↓</span>
                 </button>
               </div>
             </div>
@@ -199,7 +199,7 @@ const MainPage = () => {
                 </div>
                 <div className="portal-list__links">
                   <button type="button" onClick={downloadApp} disabled={preparingDownload}>
-                    {preparingDownload ? 'Preparing…' : 'Download app'} <span>↓</span>
+                    {preparingDownload ? 'Preparing…' : 'Download App'} <span>↓</span>
                   </button>
                 </div>
               </article>
