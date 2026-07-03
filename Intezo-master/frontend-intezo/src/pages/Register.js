@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { registerClinic, verifyClinicEmail } from '../api/clinicApi';
 import { useNotification } from '../context/NotificationContext';
+import AuthShell from '../components/Auth/AuthShell';
 import VerificationPopup from '../components/VerificationPopup';
-import '../styles/Register.scss';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -13,7 +13,7 @@ const Register = () => {
     confirmPassword: '',
     phone: '',
     address: '',
-    services: ['General Consultation'], // Default service
+    services: ['General Consultation'],
     operatingHours: {
       opening: '09:00',
       closing: '17:00'
@@ -24,9 +24,8 @@ const Register = () => {
   const [showVerification, setShowVerification] = useState(false);
   const [clinicId, setClinicId] = useState('');
   const navigate = useNavigate();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess } = useNotification();
 
-  // Available service options
   const serviceOptions = [
     'General Consultation',
     'Dental Care',
@@ -49,15 +48,13 @@ const Register = () => {
 
   const handleServiceChange = (service) => {
     const currentServices = formData.services;
-    
+
     if (currentServices.includes(service)) {
-      // Remove service if already selected
       setFormData({
         ...formData,
-        services: currentServices.filter(s => s !== service)
+        services: currentServices.filter((item) => item !== service)
       });
     } else {
-      // Add service if not selected
       setFormData({
         ...formData,
         services: [...currentServices, service]
@@ -77,7 +74,7 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -86,7 +83,7 @@ const Register = () => {
     try {
       setError('');
       setLoading(true);
-      
+
       const response = await registerClinic({
         name: formData.name,
         email: formData.email,
@@ -118,11 +115,11 @@ const Register = () => {
     }
   };
 
-  const handleVerification = async (clinicId, code) => {
+  const handleVerification = async (clinicIdToVerify, code) => {
     try {
       setLoading(true);
-      const response = await verifyClinicEmail(clinicId, code);
-      
+      const response = await verifyClinicEmail(clinicIdToVerify, code);
+
       if (response.data.status === 'pending_approval') {
         setShowVerification(false);
         setError('');
@@ -143,104 +140,113 @@ const Register = () => {
   };
 
   return (
-    <div className="register-container">
-      <div className="register-card">
-        <div className="logo">
-          <h1>Clinic Queue System</h1>
-        </div>
-        <h2>Register Your Clinic</h2>
-        {error && <div className="error-message">{error}</div>}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Clinic Name *</label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              placeholder="Enter clinic name"
-            />
-          </div>
+    <AuthShell
+      role="Clinic setup"
+      variant="register"
+      title="Register your clinic."
+      intro="Tell us how your clinic works. You can refine doctors, services and queue settings after approval."
+      asideTitle="Start with the clinic patients already know."
+      asideBody="Add the practical details once. Intezo turns them into a clear patient booking experience and a live operational queue."
+      asideItems={[
+        'Add services and opening hours',
+        'Verify the clinic email address',
+        'Continue after administrator approval'
+      ]}
+    >
+      {error && <div className="error-message">{error}</div>}
 
+      <form onSubmit={handleSubmit} className="auth-form">
+        <div className="form-group">
+          <label>Clinic name *</label>
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            required
+            placeholder="The name patients will see"
+          />
+        </div>
+
+        <div className="form-row">
           <div className="form-group">
-            <label>Email Address *</label>
+            <label>Email address *</label>
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
               required
-              placeholder="Enter clinic email"
+              placeholder="Clinic email"
             />
           </div>
-
           <div className="form-group">
-            <label>Phone Number *</label>
+            <label>Phone number *</label>
             <input
               type="tel"
               name="phone"
               value={formData.phone}
               onChange={handleChange}
               required
-              placeholder="Enter clinic phone number"
+              placeholder="Clinic phone number"
             />
           </div>
+        </div>
 
-          <div className="form-group">
-            <label>Address *</label>
-            <textarea
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              required
-              rows="3"
-              placeholder="Enter clinic address"
-            />
+        <div className="form-group">
+          <label>Address *</label>
+          <textarea
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            required
+            rows="3"
+            placeholder="Full clinic address"
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Services offered *</label>
+          <div className="services-checkbox-group">
+            {serviceOptions.map((service) => (
+              <label key={service} className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={formData.services.includes(service)}
+                  onChange={() => handleServiceChange(service)}
+                />
+                <span className="checkmark" />
+                {service}
+              </label>
+            ))}
           </div>
+        </div>
 
-          <div className="form-group">
-            <label>Services Offered *</label>
-            <div className="services-checkbox-group">
-              {serviceOptions.map(service => (
-                <label key={service} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={formData.services.includes(service)}
-                    onChange={() => handleServiceChange(service)}
-                  />
-                  <span className="checkmark"></span>
-                  {service}
-                </label>
-              ))}
+        <div className="form-group operating-hours">
+          <label>Operating hours *</label>
+          <div className="time-inputs">
+            <div className="time-input">
+              <label>Opening time</label>
+              <input
+                type="time"
+                value={formData.operatingHours.opening}
+                onChange={(e) => handleTimeChange('opening', e.target.value)}
+                required
+              />
+            </div>
+            <div className="time-input">
+              <label>Closing time</label>
+              <input
+                type="time"
+                value={formData.operatingHours.closing}
+                onChange={(e) => handleTimeChange('closing', e.target.value)}
+                required
+              />
             </div>
           </div>
+        </div>
 
-          <div className="form-group operating-hours">
-            <label>Operating Hours *</label>
-            <div className="time-inputs">
-              <div className="time-input">
-                <label>Opening Time</label>
-                <input
-                  type="time"
-                  value={formData.operatingHours.opening}
-                  onChange={(e) => handleTimeChange('opening', e.target.value)}
-                  required
-                />
-              </div>
-              <div className="time-input">
-                <label>Closing Time</label>
-                <input
-                  type="time"
-                  value={formData.operatingHours.closing}
-                  onChange={(e) => handleTimeChange('closing', e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
+        <div className="form-row">
           <div className="form-group">
             <label>Password *</label>
             <input
@@ -249,46 +255,33 @@ const Register = () => {
               value={formData.password}
               onChange={handleChange}
               required
-              placeholder="Create a password"
+              placeholder="At least 6 characters"
               minLength="6"
             />
           </div>
-
           <div className="form-group">
-            <label>Confirm Password *</label>
+            <label>Confirm password *</label>
             <input
               type="password"
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
               required
-              placeholder="Confirm your password"
+              placeholder="Repeat your password"
             />
           </div>
-
-          <button 
-            type="submit" 
-            disabled={loading} 
-            className="register-button"
-          >
-            {loading ? 'Creating Account...' : 'Register Clinic'}
-          </button>
-        </form>
-
-        <div className="login-link">
-          <p>Already have an account?</p>
-          <Link to="/clinic/login" className="login-button">
-            Login to Existing Account
-          </Link>
         </div>
-        
-        <div className="back-link">
-          <Link to="/" className="back-button">
-            ← Back to Main Page
-          </Link>
-        </div>
+
+        <button type="submit" disabled={loading} className="auth-submit">
+          {loading ? 'Creating clinic…' : 'Register clinic'}
+        </button>
+      </form>
+
+      <div className="auth-switch">
+        <p>Already registered?</p>
+        <Link to="/clinic/login">Sign in to your clinic</Link>
       </div>
-      
+
       <VerificationPopup
         isOpen={showVerification}
         onClose={() => setShowVerification(false)}
@@ -296,7 +289,7 @@ const Register = () => {
         clinicId={clinicId}
         loading={loading}
       />
-    </div>
+    </AuthShell>
   );
 };
 

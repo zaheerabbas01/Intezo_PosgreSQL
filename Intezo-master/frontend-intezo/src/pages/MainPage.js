@@ -3,23 +3,7 @@ import { Link } from 'react-router-dom';
 import { APP_DOWNLOAD_FALLBACK_URL, resolveAppDownload } from '../utils/appDownload';
 import '../styles/MainPage.scss';
 
-const ArrowIcon = () => (
-  <svg viewBox="0 0 20 20" aria-hidden="true">
-    <path d="M4 10h12M11 5l5 5-5 5" />
-  </svg>
-);
-
-const DownloadIcon = () => (
-  <svg viewBox="0 0 20 20" aria-hidden="true">
-    <path d="M10 3v9m0 0 4-4m-4 4L6 8M4 16h12" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg viewBox="0 0 20 20" aria-hidden="true">
-    <path d="m5 10 3 3 7-7" />
-  </svg>
-);
+const Arrow = () => <span aria-hidden="true">↗</span>;
 
 const MainPage = () => {
   const [preparingDownload, setPreparingDownload] = useState(false);
@@ -47,11 +31,9 @@ const MainPage = () => {
           </Link>
 
           <div className="landing-nav__links">
-            <a href="#how-it-works">How it works</a>
-            <Link to="/doctor/login">Doctor login</Link>
-            <Link to="/clinic/login" className="landing-nav__button">
-              Clinic login
-            </Link>
+            <a href="#daily-flow">How it works</a>
+            <Link to="/doctor/login">Doctor portal</Link>
+            <Link to="/clinic/login">Clinic portal <Arrow /></Link>
           </div>
         </nav>
       </header>
@@ -60,224 +42,190 @@ const MainPage = () => {
         <section className="landing-hero">
           <div className="landing-shell landing-hero__grid">
             <div className="landing-hero__copy">
-              <p className="landing-eyebrow">
-                <span />
-                Queue management for modern care
-              </p>
-              <h1>
-                Less waiting.
-                <span>More caring.</span>
-              </h1>
+              <p className="landing-label">Queue software for clinics</p>
+              <h1>A live clinic queue people can check from anywhere.</h1>
               <p className="landing-hero__lead">
-                Intezo gives patients a clear place in line and gives clinic teams
-                one calm, real-time view of every queue.
+                Patients join from the app and follow their position. Clinic staff
+                see the same line. Doctors call the next patient when they are ready.
               </p>
-
               <div className="landing-hero__actions">
-                <Link to="/clinic/register" className="landing-button landing-button--primary">
-                  Start for your clinic
-                  <ArrowIcon />
+                <Link to="/clinic/register" className="landing-action landing-action--dark">
+                  Register your clinic <Arrow />
                 </Link>
-                <button
-                  type="button"
-                  onClick={downloadApp}
-                  className="landing-button landing-button--secondary"
-                  disabled={preparingDownload}
-                >
-                  <DownloadIcon />
-                  {preparingDownload ? 'Preparing app…' : 'Get the patient app'}
+                <button type="button" onClick={downloadApp} disabled={preparingDownload}>
+                  {preparingDownload ? 'Preparing the app…' : 'Download the patient app'} <span>↓</span>
                 </button>
               </div>
+            </div>
 
-              <ul className="landing-proof" aria-label="Product highlights">
-                <li><CheckIcon /> Live queue visibility</li>
-                <li><CheckIcon /> Simple clinic setup</li>
-                <li><CheckIcon /> Mobile and web</li>
+            <aside className="hero-note">
+              <p>Made for the busiest hour of the day.</p>
+              <dl>
+                <div>
+                  <dt>Patient</dt>
+                  <dd>Joins before leaving home</dd>
+                </div>
+                <div>
+                  <dt>Clinic</dt>
+                  <dd>Sees one ordered queue</dd>
+                </div>
+                <div>
+                  <dt>Doctor</dt>
+                  <dd>Calls the next patient</dd>
+                </div>
+              </dl>
+            </aside>
+          </div>
+        </section>
+
+        <section className="queue-board" aria-label="Example live queue">
+          <div className="landing-shell queue-board__inner">
+            <span className="queue-board__status"><i /> Live queue</span>
+            <div><small>Now serving</small><strong>Q-024</strong></div>
+            <div><small>Up next</small><strong>Q-025</strong></div>
+            <div><small>Patients waiting</small><strong>18</strong></div>
+            <div><small>Average wait</small><strong>18 min</strong></div>
+            <span className="queue-board__update">Updated just now</span>
+          </div>
+        </section>
+
+        <section className="plain-section">
+          <div className="landing-shell plain-section__grid">
+            <div>
+              <p className="landing-label">Why Intezo exists</p>
+              <h2>Patients stop asking “How long?” Staff stop guessing.</h2>
+            </div>
+            <div className="plain-section__body">
+              <p>
+                A crowded waiting room usually means the queue is invisible. Intezo
+                puts that queue where everyone can see it—on the clinic dashboard and
+                on the patient’s phone.
+              </p>
+              <ul>
+                <li>One shared view for clinic staff and doctors</li>
+                <li>Automatic queue updates for patients</li>
+                <li>A clear record of who is waiting, next and served</li>
               </ul>
             </div>
-
-            <div className="queue-visual" aria-label="Preview of the Intezo queue dashboard">
-              <div className="queue-window">
-                <div className="queue-window__header">
-                  <div className="queue-window__brand">
-                    <img src="/web-app-manifest-192x192.png" alt="" aria-hidden="true" />
-                    <span>Intezo</span>
-                  </div>
-                  <div className="queue-window__date">Today, 09:42</div>
-                </div>
-
-                <div className="queue-window__title">
-                  <div>
-                    <span>Family Care Clinic</span>
-                    <h2>Current queue</h2>
-                  </div>
-                  <span className="live-badge"><i /> Live</span>
-                </div>
-
-                <div className="now-serving">
-                  <div>
-                    <span className="now-serving__label">Now serving</span>
-                    <strong>Q-024</strong>
-                    <span className="now-serving__room">Consultation room 02</span>
-                  </div>
-                  <div className="queue-ring">
-                    <span>18</span>
-                    <small>waiting</small>
-                  </div>
-                </div>
-
-                <div className="queue-line">
-                  <div className="queue-line__heading">
-                    <span>Up next</span>
-                    <span>Estimated wait</span>
-                  </div>
-                  <div className="queue-patient">
-                    <span className="queue-token">Q-025</span>
-                    <span>General consultation</span>
-                    <strong>8 min</strong>
-                  </div>
-                  <div className="queue-patient">
-                    <span className="queue-token queue-token--muted">Q-026</span>
-                    <span>General consultation</span>
-                    <strong>14 min</strong>
-                  </div>
-                </div>
-
-                <div className="queue-window__footer">
-                  <div><strong>4</strong><span>Doctors online</span></div>
-                  <div><strong>18m</strong><span>Average wait</span></div>
-                  <div><strong>42</strong><span>Seen today</span></div>
-                </div>
-              </div>
-
-              <div className="queue-update">
-                <span><CheckIcon /></span>
-                <div>
-                  <strong>Queue updated</strong>
-                  <small>Everyone sees it instantly</small>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
-        <section className="portal-section" id="portals">
+        <section className="day-section" id="daily-flow">
           <div className="landing-shell">
-            <div className="section-heading">
-              <p className="landing-kicker">Your workspace</p>
-              <h2>One platform. The right view for every role.</h2>
-              <p>Go straight to the tools made for the way you work.</p>
+            <div className="day-section__heading">
+              <p className="landing-label">A morning with Intezo</p>
+              <h2>The queue moves before the waiting room fills.</h2>
             </div>
 
-            <div className="portal-grid">
-              <article className="portal-card portal-card--featured">
-                <span className="portal-card__number">01</span>
+            <ol className="day-timeline">
+              <li>
+                <time>09:00</time>
                 <div>
-                  <p className="portal-card__label">For clinics</p>
-                  <h3>Run your day without the queue chaos.</h3>
-                  <p>Manage doctors, patients and live queues from one focused dashboard.</p>
+                  <strong>A patient joins from the app.</strong>
+                  <p>They choose a clinic and service, then receive a queue number.</p>
                 </div>
-                <div className="portal-card__actions">
-                  <Link to="/clinic/login">Clinic login <ArrowIcon /></Link>
-                  <Link to="/clinic/register">Register a clinic</Link>
-                </div>
-              </article>
-
-              <article className="portal-card">
-                <span className="portal-card__number">02</span>
+                <span>Patient app</span>
+              </li>
+              <li>
+                <time>09:01</time>
                 <div>
-                  <p className="portal-card__label">For doctors</p>
-                  <h3>See the next patient, not the noise.</h3>
-                  <p>Move through assigned queues with the information you need in the moment.</p>
+                  <strong>The clinic sees the booking.</strong>
+                  <p>The new patient appears in the correct doctor’s live queue.</p>
                 </div>
-                <div className="portal-card__actions">
-                  <Link to="/doctor/login">Doctor login <ArrowIcon /></Link>
-                  <Link to="/doctor/register">Register as a doctor</Link>
+                <span>Clinic portal</span>
+              </li>
+              <li>
+                <time>09:18</time>
+                <div>
+                  <strong>The doctor calls next.</strong>
+                  <p>Everyone’s screen updates, without a manual refresh or phone call.</p>
                 </div>
-              </article>
-            </div>
+                <span>Doctor portal</span>
+              </li>
+            </ol>
           </div>
         </section>
 
-        <section className="workflow-section" id="how-it-works">
+        <section className="portal-section">
           <div className="landing-shell">
-            <div className="section-heading section-heading--left">
-              <p className="landing-kicker">How it works</p>
-              <h2>A better queue in three simple steps.</h2>
+            <div className="portal-section__heading">
+              <p className="landing-label">Open your workspace</p>
+              <h2>Where do you need to go?</h2>
             </div>
 
-            <div className="workflow-grid">
+            <div className="portal-list">
               <article>
                 <span>01</span>
-                <h3>Set up the clinic</h3>
-                <p>Add doctors, services and operating hours from the clinic portal.</p>
+                <div>
+                  <h3>Clinic</h3>
+                  <p>Run queues, manage doctors and see the day clearly.</p>
+                </div>
+                <div className="portal-list__links">
+                  <Link to="/clinic/login">Sign in <Arrow /></Link>
+                  <Link to="/clinic/register">Create a clinic</Link>
+                </div>
               </article>
               <article>
                 <span>02</span>
-                <h3>Patients join remotely</h3>
-                <p>Patients find a clinic, book a place and follow their queue from the app.</p>
+                <div>
+                  <h3>Doctor</h3>
+                  <p>See assigned queues and move to the next patient.</p>
+                </div>
+                <div className="portal-list__links">
+                  <Link to="/doctor/login">Sign in <Arrow /></Link>
+                  <Link to="/doctor/register">Create an account</Link>
+                </div>
               </article>
               <article>
                 <span>03</span>
-                <h3>Serve with clarity</h3>
-                <p>Call the next patient while every connected screen updates in real time.</p>
+                <div>
+                  <h3>Patient</h3>
+                  <p>Find a clinic, join a queue and follow it on your phone.</p>
+                </div>
+                <div className="portal-list__links">
+                  <button type="button" onClick={downloadApp} disabled={preparingDownload}>
+                    {preparingDownload ? 'Preparing…' : 'Download app'} <span>↓</span>
+                  </button>
+                </div>
               </article>
             </div>
           </div>
         </section>
 
         <section className="patient-app-section">
-          <div className="landing-shell patient-app-card">
-            <div className="patient-app-card__copy">
-              <p className="landing-kicker">For patients</p>
-              <h2>Your place in line, always in sight.</h2>
-              <p>
-                Discover clinics, join a queue and know when to arrive—without
-                spending the day in a waiting room.
-              </p>
-              <button
-                type="button"
-                className="landing-button landing-button--light"
-                onClick={downloadApp}
-                disabled={preparingDownload}
-              >
-                <DownloadIcon />
-                {preparingDownload ? 'Preparing app…' : 'Download for Android'}
-              </button>
-              <small>We automatically select the smaller package for your phone when supported.</small>
+          <div className="landing-shell patient-app-section__inner">
+            <span className="patient-app-section__number">1</span>
+            <div>
+              <p className="landing-label">Intezo for Android</p>
+              <h2>Leave home when your turn is close.</h2>
             </div>
-
-            <div className="patient-phone" aria-hidden="true">
-              <div className="patient-phone__top" />
-              <div className="patient-phone__brand">
-                <img src="/web-app-manifest-192x192.png" alt="" />
-                <span>Intezo</span>
-              </div>
-              <p>Your queue</p>
-              <strong>Q-025</strong>
-              <span className="patient-phone__status"><i /> You are next</span>
-              <div className="patient-phone__detail">
-                <span>Estimated wait</span>
-                <strong>8 minutes</strong>
-              </div>
+            <div>
+              <p>
+                The app shows nearby clinics, your queue number and the latest
+                estimated wait—all from the same live clinic queue.
+              </p>
+              <button type="button" onClick={downloadApp} disabled={preparingDownload}>
+                {preparingDownload ? 'Preparing the app…' : 'Download for Android'} <Arrow />
+              </button>
+              <small>Intezo chooses the smaller package for your phone when supported.</small>
             </div>
           </div>
         </section>
       </main>
 
       <footer className="landing-footer">
-        <div className="landing-shell landing-footer__content">
+        <div className="landing-shell landing-footer__grid">
           <Link to="/" className="landing-brand" aria-label="Intezo home">
             <img src="/web-app-manifest-192x192.png" alt="" aria-hidden="true" />
             <span>Intezo</span>
           </Link>
-          <p>Better queues. Better care.</p>
-          <div className="landing-footer__links">
+          <p>Live queues for clinics and patients.</p>
+          <div>
             <Link to="/clinic/login">Clinic</Link>
             <Link to="/doctor/login">Doctor</Link>
             <Link to="/admin/login">Admin</Link>
           </div>
-          <small>© {new Date().getFullYear()} Intezo</small>
+          <small>© {new Date().getFullYear()}</small>
         </div>
       </footer>
     </div>

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { verifyClinicEmail } from '../api/clinicApi';
+import AuthShell from '../components/Auth/AuthShell';
 import VerificationPopup from '../components/VerificationPopup';
-import '../styles/Login.scss';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -17,22 +17,20 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setError('');
       setLoading(true);
-      
+
       const response = await login(email, password);
-      
-      // Check if verification is required
+
       if (response.data?.requiresVerification) {
         setClinicId(response.data.clinicId);
         setShowVerification(true);
         setError('');
         return;
       }
-      
-      // If login is successful with token
+
       if (response.data && response.data.token) {
         navigate('/clinic/dashboard');
       } else {
@@ -40,7 +38,7 @@ const Login = () => {
       }
     } catch (err) {
       const errorData = err.response?.data;
-      
+
       if (errorData?.requiresVerification && errorData?.clinicId) {
         setClinicId(errorData.clinicId);
         setShowVerification(true);
@@ -53,23 +51,19 @@ const Login = () => {
     }
   };
 
-  const handleVerification = async (clinicId, code) => {
+  const handleVerification = async (clinicIdToVerify, code) => {
     try {
       setLoading(true);
-      const response = await verifyClinicEmail(clinicId, code);
-      
+      const response = await verifyClinicEmail(clinicIdToVerify, code);
+
       if (response.data.token) {
-        // Store both token and clinic data
         localStorage.setItem('token', response.data.token);
         const clinicUser = {
           token: response.data.token,
           clinic: response.data.clinic
         };
         localStorage.setItem('clinicUser', JSON.stringify(clinicUser));
-        
-        // Update auth context
         setUserAfterVerification(clinicUser);
-        
         navigate('/clinic/dashboard');
       } else {
         setError('Verification successful but no token received');
@@ -84,57 +78,50 @@ const Login = () => {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="logo">
-          <h1>Clinic Queue System</h1>
+    <AuthShell
+      role="Clinic portal"
+      title="Sign in to your clinic."
+      intro="Open today’s queues, manage your team and keep patients informed."
+      asideTitle="One queue. One clear view."
+      asideBody="Everything your front desk needs to keep a busy clinic moving without losing track of who is next."
+      asideItems={[
+        'See every active doctor queue',
+        'Call and update patients in real time',
+        'Review the day from one dashboard'
+      ]}
+    >
+      {error && <div className="error-message">{error}</div>}
+      <form onSubmit={handleSubmit} className="auth-form">
+        <div className="form-group">
+          <label>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Your clinic email"
+          />
         </div>
-        <h2>Clinic Login</h2>
-        {error && <div className="error-message">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="Enter your clinic email"
-            />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="Enter your password"
-            />
-          </div>
-          <button 
-            type="submit" 
-            disabled={loading} 
-            className="login-button"
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-        
-        <div className="register-link">
-          <p>Don't have an account?</p>
-          <Link to="/clinic/register" className="register-button">
-            Register Your Clinic
-          </Link>
+        <div className="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="Your password"
+          />
         </div>
-        
-        <div className="back-link">
-          <Link to="/" className="back-button">
-            ← Back to Main Page
-          </Link>
-        </div>
+        <button type="submit" disabled={loading} className="auth-submit">
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+
+      <div className="auth-switch">
+        <p>New to Intezo?</p>
+        <Link to="/clinic/register">Register your clinic</Link>
       </div>
-      
+
       <VerificationPopup
         isOpen={showVerification}
         onClose={() => setShowVerification(false)}
@@ -142,7 +129,7 @@ const Login = () => {
         clinicId={clinicId}
         loading={loading}
       />
-    </div>
+    </AuthShell>
   );
 };
 
