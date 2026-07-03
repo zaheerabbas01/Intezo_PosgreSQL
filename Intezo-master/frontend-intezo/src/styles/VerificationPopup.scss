@@ -6,129 +6,132 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(24, 18, 14, 0.72);
+  background: rgba(24, 18, 14, 0.55);
+  backdrop-filter: blur(3px);
 }
 
 .verification-popup {
-  width: min(100%, 460px);
-  padding: 42px;
-  border: 1px solid #cfc5b8;
-  border-radius: 0;
-  background: #fbf8f2;
-  color: #211914;
-  text-align: left;
-  box-shadow: 18px 18px 0 rgba(24, 18, 14, 0.2);
+  width: min(100%, 400px);
+  padding: 32px 28px;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #1f2937;
+  text-align: center;
+  font-family: Arial, Helvetica, sans-serif;
+  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.25);
 
   h3 {
-    margin: 0 0 12px;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 2.45rem;
-    font-weight: 400;
-    letter-spacing: -0.045em;
+    margin: 0 0 8px;
+    font-size: 1.35rem;
+    font-weight: 700;
   }
 
   > p {
-    margin: 0 0 28px;
-    color: #6c625a;
-    font-size: 0.78rem;
-    line-height: 1.6;
+    margin: 0 0 24px;
+    color: #6b7280;
+    font-size: 0.9rem;
+    line-height: 1.5;
   }
 
   .verification-input {
     width: 100%;
-    padding: 16px 0;
-    border: 0;
-    border-bottom: 1px solid #211914;
-    border-radius: 0;
+    padding: 14px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
     outline: 0;
-    background: transparent;
-    color: #211914;
-    font: 400 2rem Georgia, "Times New Roman", serif;
-    letter-spacing: 0.26em;
+    background: #f9fafb;
+    color: #1f2937;
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: 0.4em;
     text-align: center;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &::placeholder {
+      font-size: 0.9rem;
+      font-weight: 400;
+      letter-spacing: normal;
+      color: #9ca3af;
+    }
 
     &:focus {
-      border-bottom-color: #ef6235;
-      box-shadow: inset 0 -1px 0 #ef6235;
+      border-color: #ef6235;
+      box-shadow: 0 0 0 3px rgba(239, 98, 53, 0.18);
     }
   }
 
   .popup-buttons {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px 18px;
-    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 22px;
 
     button {
       min-height: 46px;
       padding: 0 16px;
       border: 0;
-      border-radius: 0;
+      border-radius: 10px;
       background: transparent;
-      color: #211914;
+      color: #1f2937;
       font: inherit;
-      font-size: 0.7rem;
-      font-weight: 700;
+      font-size: 0.92rem;
+      font-weight: 600;
       cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease;
 
       &:first-child {
-        background: #211914;
+        background: #ef6235;
         color: #fff;
 
         &:hover:not(:disabled) {
-          background: #a33d20;
+          background: #d94f26;
         }
       }
 
       &:nth-child(2) {
-        border-bottom: 1px solid #211914;
+        border: 1px solid #d1d5db;
+
+        &:hover:not(:disabled) {
+          background: #f3f4f6;
+        }
       }
 
       &:last-child {
-        grid-column: 1 / -1;
-        min-height: 30px;
-        justify-self: start;
-        padding: 0 0 3px;
-        border-bottom: 1px solid #857a71;
-        color: #6c625a;
+        min-height: 38px;
+        color: #6b7280;
+
+        &:hover:not(:disabled) {
+          color: #1f2937;
+        }
       }
 
       &:disabled {
         opacity: 0.45;
-        cursor: wait;
+        cursor: not-allowed;
       }
     }
   }
 
   .error-message,
   .success-message {
-    margin: 0 0 18px;
-    padding: 12px 13px;
-    border-left: 3px solid #b13f2b;
-    border-radius: 0;
-    background: #f8e5dd;
-    color: #7d2c1d;
-    font-size: 0.7rem;
-    line-height: 1.5;
+    margin: 0 0 16px;
+    padding: 11px 14px;
+    border-radius: 10px;
+    background: #fdecea;
+    color: #b23a24;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    text-align: left;
   }
 
   .success-message {
-    border-left-color: #398054;
-    background: #e5f0e8;
-    color: #275f3d;
+    background: #e7f4ec;
+    color: #1f7a4d;
   }
 }
 
 @media (max-width: 520px) {
   .verification-popup {
-    padding: 30px 24px;
-
-    .popup-buttons {
-      grid-template-columns: 1fr;
-
-      button:last-child {
-        grid-column: auto;
-      }
-    }
+    padding: 26px 20px;
   }
 }
