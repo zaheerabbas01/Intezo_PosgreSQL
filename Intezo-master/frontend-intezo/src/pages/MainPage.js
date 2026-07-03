@@ -89,27 +89,6 @@ const MainPage = () => {
           </div>
         </section>
 
-        <section className="plain-section">
-          <div className="landing-shell plain-section__grid">
-            <div>
-              <p className="landing-label">Why Intezo exists</p>
-              <h2>Patients stop asking “How long?” Staff stop guessing.</h2>
-            </div>
-            <div className="plain-section__body">
-              <p>
-                A crowded waiting room usually means the queue is invisible. Intezo
-                puts that queue where everyone can see it—on the clinic dashboard and
-                on the patient’s phone.
-              </p>
-              <ul>
-                <li>One shared view for clinic staff and doctors</li>
-                <li>Automatic queue updates for patients</li>
-                <li>A clear record of who is waiting, next and served</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-
         <section className="day-section" id="daily-flow">
           <div className="landing-shell">
             <div className="day-section__heading">
@@ -192,25 +171,6 @@ const MainPage = () => {
           </div>
         </section>
 
-        <section className="patient-app-section">
-          <div className="landing-shell patient-app-section__inner">
-            <span className="patient-app-section__number">1</span>
-            <div>
-              <p className="landing-label">Intezo for Android</p>
-              <h2>Leave home when your turn is close.</h2>
-            </div>
-            <div>
-              <p>
-                The app shows nearby clinics, your queue number and the latest
-                estimated wait—all from the same live clinic queue.
-              </p>
-              <button type="button" onClick={downloadApp} disabled={preparingDownload}>
-                {preparingDownload ? 'Preparing the app…' : 'Download for Android'} <Arrow />
-              </button>
-              <small>Intezo chooses the smaller package for your phone when supported.</small>
-            </div>
-          </div>
-        </section>
       </main>
 
       <footer className="landing-footer">
