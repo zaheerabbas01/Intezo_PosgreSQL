@@ -1,19 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { APP_DOWNLOAD_FALLBACK_URL, resolveAppDownload } from '../utils/appDownload';
 import '../styles/MainPage.scss';
 
 const MainPage = () => {
-  // Cloudflare R2 APK download URL - replace with your actual R2 public URL
-  const R2_APK_URL = 'https://apk.intezo.online/intezo-app-latest.apk';
-  
-  const downloadApp = () => {
-    // Direct download from Cloudflare R2
-    const link = document.createElement('a');
-    link.href = R2_APK_URL;
-    link.download = 'Intezo-App.apk';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const [preparingDownload, setPreparingDownload] = useState(false);
+
+  const downloadApp = async () => {
+    if (preparingDownload) return;
+    setPreparingDownload(true);
+    try {
+      const download = await resolveAppDownload();
+      window.location.assign(download.url);
+    } catch {
+      window.location.assign(APP_DOWNLOAD_FALLBACK_URL);
+    } finally {
+      setPreparingDownload(false);
+    }
   };
   return (
     <div className="main-page">
@@ -35,9 +38,14 @@ const MainPage = () => {
                 <p>Get the Intezo app for seamless queue management</p>
               </div>
               <div className="download-action">
-                <button onClick={downloadApp} className="download-btn">
-                  Download APK
+                <button
+                  onClick={downloadApp}
+                  className={`download-btn${preparingDownload ? ' loading' : ''}`}
+                  disabled={preparingDownload}
+                >
+                  {preparingDownload ? 'Preparing...' : 'Download Android App'}
                 </button>
+                <span className="download-help">Smaller device-specific APK when supported</span>
               </div>
             </div>
           </div>

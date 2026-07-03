@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#4f46e5">
+  <title>Download Intezo for Android</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #eef2ff;
+      color: #172033;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 32px 18px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, .24), transparent 38%),
+        linear-gradient(145deg, #f8fafc, #e0e7ff);
+    }
+    main {
+      width: min(760px, 100%);
+      overflow: hidden;
+      border: 1px solid rgba(99, 102, 241, .16);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 28px 80px rgba(49, 46, 129, .17);
+    }
+    header { padding: 34px 34px 26px; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 26px;
+      color: #4338ca;
+      font-size: 20px;
+      font-weight: 800;
+    }
+    .brand-mark {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: #4f46e5;
+      color: white;
+      font-size: 24px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 6vw, 46px);
+      line-height: 1.08;
+    }
+    .lead {
+      max-width: 590px;
+      margin: 14px 0 0;
+      color: #64748b;
+      font-size: 17px;
+      line-height: 1.6;
+    }
+    .release {
+      margin-top: 18px;
+      color: #475569;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .download-panel {
+      padding: 26px 34px 34px;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .recommended {
+      width: 100%;
+      min-height: 54px;
+      padding: 14px 20px;
+      border: 0;
+      border-radius: 12px;
+      background: #4f46e5;
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 800;
+      box-shadow: 0 10px 26px rgba(79, 70, 229, .24);
+    }
+    .recommended:disabled { cursor: wait; opacity: .7; }
+    .recommendation {
+      min-height: 22px;
+      margin: 10px 0 0;
+      color: #64748b;
+      text-align: center;
+      font-size: 13px;
+    }
+    details { margin-top: 22px; }
+    summary {
+      cursor: pointer;
+      color: #4338ca;
+      font-weight: 700;
+    }
+    .alternatives {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .alternative {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      background: white;
+      color: #334155;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .alternative small { color: #64748b; font-weight: 500; }
+    .instructions {
+      margin: 26px 0 0;
+      padding: 18px;
+      border-radius: 12px;
+      background: #fff7ed;
+      color: #9a3412;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .error { color: #b91c1c; }
+    footer {
+      padding: 18px 34px;
+      border-top: 1px solid #e2e8f0;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    @media (max-width: 580px) {
+      body { padding: 0; }
+      main { min-height: 100vh; border: 0; border-radius: 0; }
+      header, .download-panel, footer { padding-left: 20px; padding-right: 20px; }
+      .alternatives { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">+</span>
+        Intezo
+      </div>
+      <h1>Healthcare queues, right in your pocket.</h1>
+      <p class="lead">Download the signed Intezo Android app. We select the smallest compatible package when your browser shares device architecture information.</p>
+      <div id="release" class="release">Checking the latest release...</div>
+    </header>
+
+    <section class="download-panel">
+      <button id="recommended" class="recommended" type="button" disabled>Preparing download...</button>
+      <p id="recommendation" class="recommendation"></p>
+
+      <details>
+        <summary>Choose a different Android package</summary>
+        <div id="alternatives" class="alternatives"></div>
+      </details>
+
+      <p class="instructions">
+        Website installation requires Android to allow your browser to install unknown apps.
+        Keep the downloaded APK only from this official page. Future updates must use the same signing certificate.
+      </p>
+    </section>
+
+    <footer>
+      Requires Android 7.0 or newer. If you are unsure which package to choose, use Universal.
+      Google Play distribution will replace manual APK selection when the store release is available.
+    </footer>
+  </main>
+
+  <script>
+    const labels = {
+      "arm64-v8a": "ARM64 (most phones)",
+      "armeabi-v7a": "ARM 32-bit (older phones)",
+      "x86_64": "x86_64 (Chromebook/emulator)",
+      universal: "Universal (all supported devices)"
+    };
+
+    const formatSize = bytes => `${(bytes / 1048576).toFixed(1)} MB`;
+
+    async function detectAbi() {
+      const ua = navigator.userAgent || "";
+      const isAndroid = /Android/i.test(ua) || navigator.userAgentData?.platform === "Android";
+      if (!isAndroid) return { abi: "universal", confident: false, android: false };
+
+      try {
+        if (navigator.userAgentData?.getHighEntropyValues) {
+          const hints = await navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]);
+          const architecture = String(hints.architecture || "").toLowerCase();
+          const bitness = String(hints.bitness || "");
+          if (architecture.includes("arm") && bitness === "64") return { abi: "arm64-v8a", confident: true, android: true };
+          if (architecture.includes("arm") && bitness === "32") return { abi: "armeabi-v7a", confident: true, android: true };
+          if ((architecture.includes("x86") || architecture.includes("x64")) && bitness === "64") {
+            return { abi: "x86_64", confident: true, android: true };
+          }
+        }
+      } catch (_) {
+        // The universal APK remains the safe fallback.
+      }
+
+      if (/arm64|aarch64|armv8/i.test(ua)) return { abi: "arm64-v8a", confident: true, android: true };
+      if (/armv7|armeabi/i.test(ua)) return { abi: "armeabi-v7a", confident: true, android: true };
+      if (/x86_64|x64/i.test(ua)) return { abi: "x86_64", confident: true, android: true };
+      return { abi: "universal", confident: false, android: true };
+    }
+
+    async function initialize() {
+      const releaseElement = document.getElementById("release");
+      const button = document.getElementById("recommended");
+      const recommendation = document.getElementById("recommendation");
+      const alternatives = document.getElementById("alternatives");
+
+      try {
+        const [manifestResponse, detection] = await Promise.all([
+          fetch("/latest.json", { cache: "no-store" }),
+          detectAbi()
+        ]);
+        if (!manifestResponse.ok) throw new Error("Release information is unavailable.");
+
+        const manifest = await manifestResponse.json();
+        const selected = manifest.downloads[detection.abi] || manifest.downloads.universal;
+        if (!selected?.url) throw new Error("No compatible package is available.");
+
+        releaseElement.textContent = `Version ${manifest.versionName} (${manifest.versionCode})`;
+        button.disabled = false;
+        button.textContent = `Download ${labels[detection.abi]} - ${formatSize(selected.sizeBytes)}`;
+        button.addEventListener("click", () => window.location.assign(selected.url));
+
+        recommendation.textContent = detection.confident
+          ? `Recommended package detected: ${labels[detection.abi]}.`
+          : detection.android
+            ? "Your browser did not reveal the CPU type, so Universal is selected for compatibility."
+            : "Open this page on Android for automatic device selection.";
+
+        Object.entries(manifest.downloads).forEach(([abi, download]) => {
+          const link = document.createElement("a");
+          link.className = "alternative";
+          link.href = download.url;
+          link.innerHTML = `<span>${labels[abi] || abi}</span><small>${formatSize(download.sizeBytes)}</small>`;
+          alternatives.appendChild(link);
+        });
+      } catch (error) {
+        releaseElement.textContent = "Latest release unavailable";
+        button.textContent = "Download temporarily unavailable";
+        recommendation.textContent = error.message;
+        recommendation.classList.add("error");
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
