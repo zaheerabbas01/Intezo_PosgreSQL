@@ -97,6 +97,11 @@ export const getPendingPremiumPayments = async (req, res) => {
   catch (error) { res.status(500).json({ error: error.message }); }
 };
 
+export const getPremiumUsers = async (req, res) => {
+  try { res.json(await adminService.fetchPremiumUsers()); }
+  catch (error) { res.status(500).json({ error: error.message }); }
+};
+
 export const approvePremiumPayment = async (req, res) => {
   try { await adminService.handlePremiumApproval(req.params.id, req.user.id); res.json({ message: 'Premium payment approved successfully' }); }
   catch (error) { res.status(error.message === 'Payment not found' ? 404 : error.message === 'Payment already processed' ? 400 : 500).json({ error: error.message }); }

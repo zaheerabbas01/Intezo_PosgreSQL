@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Textarea } from './ui/textarea';
 import { API_CONFIG } from '../config/api';
 
-const PremiumPayments = () => {
+const PremiumPayments = ({ onPaymentProcessed }) => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -60,7 +56,8 @@ const PremiumPayments = () => {
 
       if (response.ok) {
         alert('Premium payment approved successfully');
-        fetchPendingPayments();
+        await fetchPendingPayments();
+        onPaymentProcessed?.();
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to approve payment');
@@ -96,7 +93,8 @@ const PremiumPayments = () => {
         setShowRejectDialog(false);
         setRejectionReason('');
         setSelectedPayment(null);
-        fetchPendingPayments();
+        await fetchPendingPayments();
+        onPaymentProcessed?.();
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to reject payment');

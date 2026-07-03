@@ -19,6 +19,7 @@ import {
   getOnlineUsers,
   logoutUser,
   getPendingPremiumPayments,
+  getPremiumUsers,
   approvePremiumPayment,
   rejectPremiumPayment
 } from '../controllers/admin/admin.controller.js';
@@ -82,6 +83,7 @@ router.get('/online-users', getOnlineUsers);
 router.post('/logout', logoutUser);
 
 // Premium payment management
+router.get('/premium-users', getPremiumUsers);
 router.get('/premium-payments', getPendingPremiumPayments);
 router.post('/premium-payments/:id/approve', approvePremiumPayment);
 router.post('/premium-payments/:id/reject', rejectPremiumPayment);

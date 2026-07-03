@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import AdminRealTime from '../components/AdminRealTime';
 import PremiumPayments from '../components/PremiumPayments';
+import PremiumUsers from '../components/PremiumUsers';
 import io from 'socket.io-client';
 import { API_CONFIG } from '../config/api';
 import '../styles/AdminDashboard.css';
@@ -317,6 +318,12 @@ const AdminDashboard = () => {
         >
           Real-time Monitor
         </button>
+        <button
+          className={activeTab === 'premiumUsers' ? 'active' : ''}
+          onClick={() => setActiveTab('premiumUsers')}
+        >
+          Premium Users ({stats.activePremiumUsers || 0})
+        </button>
         <button 
           className={activeTab === 'premium' ? 'active' : ''}
           onClick={() => setActiveTab('premium')}
@@ -343,12 +350,18 @@ const AdminDashboard = () => {
             <h3>Total Queues</h3>
             <p>{stats.totalQueues || 0}</p>
           </div>
+          <div className="stat-card premium">
+            <h3>Active Premium Users</h3>
+            <p>{stats.activePremiumUsers || 0}</p>
+          </div>
         </div>
       )}
 
       {activeTab === 'realtime' && <AdminRealTime />}
 
-      {activeTab === 'premium' && <PremiumPayments />}
+      {activeTab === 'premiumUsers' && <PremiumUsers />}
+
+      {activeTab === 'premium' && <PremiumPayments onPaymentProcessed={fetchStats} />}
 
       {activeTab === 'patients' && (
         <div className="data-table">

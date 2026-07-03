@@ -2,10 +2,41 @@ import { Patient, Doctor, Clinic, Queue, PendingUser, PremiumPayment } from '../
 import redisClient from '../../config/redis.js';
 import emailService from '../../services/emailService.js';
 import { logActivity, publishAdminUpdate } from '../../utils/helpers.js';
+import { Op } from 'sequelize';
 
 export const getStats = async () => {
-  const [totalPatients, totalDoctors, totalClinics, totalQueues, activeQueues, pendingApprovals] = await Promise.all([Patient.count(), Doctor.count(), Clinic.count(), Queue.count(), Queue.count({ where: { status: ['waiting', 'in_progress'] } }), PendingUser.count({ where: { status: 'pending_approval' } })]);
-  return { totalPatients, totalDoctors, totalClinics, totalQueues, activeQueues, pendingApprovals, lastUpdated: new Date() };
+  const [
+    totalPatients,
+    totalDoctors,
+    totalClinics,
+    totalQueues,
+    activeQueues,
+    pendingApprovals,
+    activePremiumUsers
+  ] = await Promise.all([
+    Patient.count(),
+    Doctor.count(),
+    Clinic.count(),
+    Queue.count(),
+    Queue.count({ where: { status: ['waiting', 'in_progress'] } }),
+    PendingUser.count({ where: { status: 'pending_approval' } }),
+    Patient.count({
+      where: {
+        isPremium: true,
+        premiumExpiresAt: { [Op.gt]: new Date() }
+      }
+    })
+  ]);
+  return {
+    totalPatients,
+    totalDoctors,
+    totalClinics,
+    totalQueues,
+    activeQueues,
+    pendingApprovals,
+    activePremiumUsers,
+    lastUpdated: new Date()
+  };
 };
 
 export const getPaginatedRecords = async (Model, page, limit) => {
@@ -96,6 +127,74 @@ export const processUserLogout = async (userId) => {
 };
 
 export const fetchPendingPayments = async () => PremiumPayment.findAll({ where: { status: 'pending' }, include: [{ model: Patient, as: 'patient', attributes: ['name', 'email', 'phone'] }], order: [['submittedAt', 'DESC']] });
+
+export const fetchPremiumUsers = async () => {
+  const patients = await Patient.findAll({
+    where: { isPremium: true },
+    attributes: [
+      'id',
+      'name',
+      'email',
+      'phone',
+      'premiumExpiresAt',
+      'createdAt',
+      'updatedAt'
+    ],
+    order: [['premiumExpiresAt', 'DESC']]
+  });
+
+  const patientIds = patients.map(patient => patient.id);
+  const approvedPayments = patientIds.length === 0
+    ? []
+    : await PremiumPayment.findAll({
+      where: {
+        patientId: { [Op.in]: patientIds },
+        status: 'approved'
+      },
+      attributes: [
+        'id',
+        'patientId',
+        'paymentMethod',
+        'amount',
+        'submittedAt',
+        'reviewedAt'
+      ],
+      order: [['reviewedAt', 'DESC']]
+    });
+
+  const latestPaymentByPatient = new Map();
+  for (const payment of approvedPayments) {
+    if (!latestPaymentByPatient.has(payment.patientId)) {
+      latestPaymentByPatient.set(payment.patientId, payment.toJSON());
+    }
+  }
+
+  const now = new Date();
+  const premiumUsers = patients.map(patient => {
+    const data = patient.toJSON();
+    const expiresAt = data.premiumExpiresAt ? new Date(data.premiumExpiresAt) : null;
+    const isActive = Boolean(expiresAt && expiresAt > now);
+    return {
+      ...data,
+      premiumStatus: isActive ? 'active' : 'expired',
+      latestPayment: latestPaymentByPatient.get(patient.id) || null
+    };
+  }).sort((userA, userB) => {
+    if (userA.premiumStatus !== userB.premiumStatus) {
+      return userA.premiumStatus === 'active' ? -1 : 1;
+    }
+    return new Date(userB.premiumExpiresAt || 0) - new Date(userA.premiumExpiresAt || 0);
+  });
+
+  return {
+    premiumUsers,
+    summary: {
+      total: premiumUsers.length,
+      active: premiumUsers.filter(user => user.premiumStatus === 'active').length,
+      expired: premiumUsers.filter(user => user.premiumStatus === 'expired').length
+    }
+  };
+};
 
 export const handlePremiumApproval = async (paymentId, adminId) => {
   const payment = await PremiumPayment.findByPk(paymentId, { include: [{ model: Patient, as: 'patient' }] });

@@ -1613,6 +1613,18 @@ export const swaggerSpec = {
         }
       }
     },
+    '/admin/premium-users': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Get all premium users',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Premium users returned with active and expired subscription status' },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+          500: { $ref: '#/components/responses/InternalServerError' }
+        }
+      }
+    },
     '/admin/premium-payments/{id}/approve': {
       post: {
         tags: ['Admin'],
