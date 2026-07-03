@@ -213,7 +213,11 @@ export const verifyClinicEmail = async (req, res) => {
         services: result.clinic.services,
         operatingHours: result.clinic.operatingHours,
         isOpen: result.clinic.isOpen,
-        role: result.clinic.role
+        role: result.clinic.role,
+        profilePhoto: result.clinic.profilePhoto,
+        latitude: result.clinic.latitude,
+        longitude: result.clinic.longitude,
+        locationUpdatedAt: result.clinic.locationUpdatedAt
       }
     });
 

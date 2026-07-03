@@ -191,4 +191,51 @@
       }
     }
   }
+
+  .location-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #eee;
+
+    h2 {
+      color: #2c3e50;
+      margin-bottom: 0.5rem;
+      font-size: 1.4rem;
+    }
+
+    .location-hint {
+      margin: 0 0 1rem;
+      color: #6b7280;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .location-status {
+      margin-bottom: 1rem;
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+
+      &.is-set {
+        background: #e7f4ec;
+        color: #1f7a4d;
+      }
+
+      &.not-set {
+        background: #fdf0e9;
+        color: #b23a24;
+      }
+    }
+
+    .location-map-wrapper {
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+
+      .clinic-location-map {
+        height: 340px;
+      }
+    }
+  }
 }

@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateClinicProfile, getClinicProfile } from '../api/clinicApi';
+import { updateClinicProfile, getClinicProfile, updateClinicLocation } from '../api/clinicApi';
 import { API_CONFIG } from '../config/api';
+import ClinicLocationPicker from '../components/ClinicLocationPicker';
 import '../styles/Settings.scss';
+
+const hasCoordinates = clinic => (
+  clinic?.latitude !== null &&
+  clinic?.latitude !== undefined &&
+  clinic?.longitude !== null &&
+  clinic?.longitude !== undefined &&
+  Number.isFinite(Number(clinic?.latitude)) &&
+  Number.isFinite(Number(clinic?.longitude))
+);
 
 const Settings = () => {
   const { currentUser, setCurrentUser } = useAuth();
@@ -18,7 +28,45 @@ const Settings = () => {
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [locationSuccess, setLocationSuccess] = useState(false);
   const fileInputRef = useRef(null);
+
+  const clinic = currentUser?.clinic;
+  const locationIsSet = hasCoordinates(clinic);
+  const initialLocation = locationIsSet
+    ? { latitude: clinic.latitude, longitude: clinic.longitude }
+    : null;
+
+  const handleLocationSave = async (selectedLocation) => {
+    if (!selectedLocation) {
+      setLocationError('Select your clinic location on the map first.');
+      return;
+    }
+
+    setLocationSaving(true);
+    setLocationError('');
+    setLocationSuccess(false);
+    try {
+      const response = await updateClinicLocation(
+        selectedLocation.latitude,
+        selectedLocation.longitude
+      );
+      const updatedUser = {
+        ...currentUser,
+        clinic: { ...clinic, ...response.data.location }
+      };
+      localStorage.setItem('clinicUser', JSON.stringify(updatedUser));
+      setCurrentUser(updatedUser);
+      setLocationSuccess(true);
+      setTimeout(() => setLocationSuccess(false), 3000);
+    } catch (err) {
+      setLocationError(err.response?.data?.error || 'Unable to save clinic location.');
+    } finally {
+      setLocationSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (currentUser?.clinic) {
@@ -292,6 +340,35 @@ const Settings = () => {
           Save Changes
         </button>
       </form>
+
+      <div className="location-section">
+        <h2>Clinic Location</h2>
+        <p className="location-hint">
+          {locationIsSet
+            ? 'Your clinic location is set. Move the marker or pick a new spot to update it.'
+            : 'Set your clinic on the map so patients can find it nearby.'}
+        </p>
+
+        <div className={`location-status ${locationIsSet ? 'is-set' : 'not-set'}`}>
+          {locationIsSet
+            ? `Current location: ${Number(clinic.latitude).toFixed(6)}, ${Number(clinic.longitude).toFixed(6)}`
+            : 'No location set yet'}
+        </div>
+
+        {locationSuccess && (
+          <div className="success-message">Clinic location updated successfully!</div>
+        )}
+
+        <div className="location-map-wrapper">
+          <ClinicLocationPicker
+            initialLocation={initialLocation}
+            onSave={handleLocationSave}
+            saving={locationSaving}
+            error={locationError}
+            saveLabel={locationIsSet ? 'Update location' : 'Save clinic location'}
+          />
+        </div>
+      </div>
     </div>
   );
 };
