@@ -18,9 +18,6 @@ const detectAndroidAbi = async () => {
       const bitness = String(hints.bitness || '');
       if (architecture.includes('arm') && bitness === '64') return 'arm64-v8a';
       if (architecture.includes('arm') && bitness === '32') return 'armeabi-v7a';
-      if ((architecture.includes('x86') || architecture.includes('x64')) && bitness === '64') {
-        return 'x86_64';
-      }
     }
   } catch {
     // Browser privacy settings can withhold high-entropy architecture hints.
@@ -28,7 +25,6 @@ const detectAndroidAbi = async () => {
 
   if (/arm64|aarch64|armv8/i.test(userAgent)) return 'arm64-v8a';
   if (/armv7|armeabi/i.test(userAgent)) return 'armeabi-v7a';
-  if (/x86_64|x64/i.test(userAgent)) return 'x86_64';
   return null;
 };
 

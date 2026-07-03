@@ -183,7 +183,6 @@
     const labels = {
       "arm64-v8a": "ARM64 (most phones)",
       "armeabi-v7a": "ARM 32-bit (older phones)",
-      "x86_64": "x86_64 (Chromebook/emulator)",
       universal: "Universal (all supported devices)"
     };
 
@@ -201,9 +200,6 @@
           const bitness = String(hints.bitness || "");
           if (architecture.includes("arm") && bitness === "64") return { abi: "arm64-v8a", confident: true, android: true };
           if (architecture.includes("arm") && bitness === "32") return { abi: "armeabi-v7a", confident: true, android: true };
-          if ((architecture.includes("x86") || architecture.includes("x64")) && bitness === "64") {
-            return { abi: "x86_64", confident: true, android: true };
-          }
         }
       } catch (_) {
         // The universal APK remains the safe fallback.
@@ -211,7 +207,6 @@
 
       if (/arm64|aarch64|armv8/i.test(ua)) return { abi: "arm64-v8a", confident: true, android: true };
       if (/armv7|armeabi/i.test(ua)) return { abi: "armeabi-v7a", confident: true, android: true };
-      if (/x86_64|x64/i.test(ua)) return { abi: "x86_64", confident: true, android: true };
       return { abi: "universal", confident: false, android: true };
     }
 

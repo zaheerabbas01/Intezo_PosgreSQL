@@ -26,8 +26,8 @@ $env:AWS_SECRET_ACCESS_KEY = 'your-r2-secret-access-key'
 powershell -ExecutionPolicy Bypass -File .\app-hosting\deploy-split-apks.ps1
 ```
 
-This creates signed, obfuscated APKs for `arm64-v8a`, `armeabi-v7a`, and
-`x86_64`, plus a universal compatibility fallback. It writes a versioned
+This creates signed, obfuscated APKs for mobile `arm64-v8a` and
+`armeabi-v7a`, plus an ARM-only universal compatibility fallback. It writes a versioned
 release manifest with file sizes and SHA-256 hashes, uploads the APKs to the
 existing Cloudflare R2 domain, and deploys the device-aware download page and
 manifest to Firebase Hosting. Firebase's free Spark plan forbids executable

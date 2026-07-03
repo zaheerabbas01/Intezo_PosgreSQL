@@ -101,7 +101,9 @@ if (-not $SkipBuild) {
     try {
         Invoke-Checked 'flutter' 'pub' 'get'
         Invoke-Checked 'flutter' 'analyze' '--no-fatal-infos'
-        Invoke-Checked 'flutter' 'build' 'apk' '--release' '--split-per-abi' '--obfuscate' "--split-debug-info=$symbolsRoot"
+        Invoke-Checked 'flutter' 'build' 'apk' '--release' '--split-per-abi' `
+            '--target-platform' 'android-arm,android-arm64' `
+            '--obfuscate' "--split-debug-info=$symbolsRoot"
     } finally {
         Pop-Location
     }
@@ -126,15 +128,12 @@ $downloads['arm64-v8a'] = Copy-ReleaseArtifact `
     -Source (Join-Path $outputRoot 'app-arm64-v8a-release.apk') `
     -FileName 'intezo-arm64-v8a.apk'
 $downloads['arm64-v8a']['androidVersionCode'] = 2000 + $versionCode
-$downloads['x86_64'] = Copy-ReleaseArtifact `
-    -Source (Join-Path $outputRoot 'app-x86_64-release.apk') `
-    -FileName 'intezo-x86_64.apk'
-$downloads['x86_64']['androidVersionCode'] = 4000 + $versionCode
-
 if (-not $SkipBuild) {
     Push-Location $mobileRoot
     try {
-        Invoke-Checked 'flutter' 'build' 'apk' '--release' '--obfuscate' "--split-debug-info=$symbolsRoot"
+        Invoke-Checked 'flutter' 'build' 'apk' '--release' `
+            '--target-platform' 'android-arm,android-arm64' `
+            '--obfuscate' "--split-debug-info=$symbolsRoot"
     } finally {
         Pop-Location
     }
@@ -152,7 +151,9 @@ $manifest = [ordered]@{
     versionName = $versionName
     versionCode = $versionCode
     minimumAndroidSdk = 24
-    minimumNextPlayStoreVersionCode = 4001 + $versionCode
+    # Version 4005 was already published briefly for x86_64. Keep the first
+    # Play Store version above it so every issued APK remains upgradeable.
+    minimumNextPlayStoreVersionCode = [math]::Max(4006, 2001 + $versionCode)
     publishedAt = (Get-Date).ToUniversalTime().ToString('o')
     downloadPage = "$BaseUrl/"
     downloads = $downloads
