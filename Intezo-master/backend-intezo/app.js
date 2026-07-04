@@ -52,6 +52,14 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Please try again later.' }
 });
 
+const phoneVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many phone verification requests. Please try again later.' }
+});
+
 app.use([
   '/api/auth',
   '/api/clinics/login',
@@ -60,6 +68,7 @@ app.use([
   '/api/doctors/login',
   '/api/doctors/register'
 ], authLimiter);
+app.use('/api/phone-verification/start', phoneVerificationLimiter);
 
 // Initialize queue counters
 const initializeQueueCounters = async () => {
@@ -105,8 +114,16 @@ const initializeQueueCounters = async () => {
 
 // Call this function when your server starts
 
-// Parse only bounded request bodies. Upload routes use Multer's own limit.
-app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+// Parse only bounded request bodies. Keep the exact WhatsApp webhook bytes so
+// Meta's X-Hub-Signature-256 can be validated before trusting the payload.
+app.use(express.json({
+  limit: process.env.JSON_BODY_LIMIT || '1mb',
+  verify: (req, _res, buffer) => {
+    if (req.originalUrl.startsWith('/api/webhooks/whatsapp')) {
+      req.rawBody = Buffer.from(buffer);
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Swagger UI and JSON export

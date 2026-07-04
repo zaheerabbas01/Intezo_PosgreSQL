@@ -9,7 +9,7 @@ class DatabaseService {
   static Database? _database;
   static const String _databaseName = 'intezo_secure.db';
   static const String _legacyDatabaseName = 'qatar_app.db';
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 4;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -46,6 +46,7 @@ class DatabaseService {
         name TEXT NOT NULL,
         email TEXT NOT NULL,
         phone TEXT NOT NULL,
+        phoneVerified INTEGER NOT NULL DEFAULT 0,
         createdAt INTEGER,
         updatedAt INTEGER
       )
@@ -97,6 +98,11 @@ class DatabaseService {
           useCount INTEGER DEFAULT 1
         )
       ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute(
+        'ALTER TABLE patients ADD COLUMN phoneVerified INTEGER NOT NULL DEFAULT 0',
+      );
     }
   }
 

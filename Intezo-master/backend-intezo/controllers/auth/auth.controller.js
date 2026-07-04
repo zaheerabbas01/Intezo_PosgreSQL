@@ -278,7 +278,8 @@ export const verifyPatientEmail = async (req, res) => {
         _id: result.patient.id,
         name: result.patient.name,
         email: result.patient.email,
-        phone: result.patient.phone
+        phone: result.patient.phone,
+        phoneVerified: result.patient.phoneVerified
       }
     });
 

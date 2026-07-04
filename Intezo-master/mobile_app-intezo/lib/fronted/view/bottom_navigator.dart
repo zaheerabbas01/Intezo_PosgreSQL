@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../providers/patient_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../res/components/wigets/colors.dart';
 import 'homescreen.dart';
 import 'profile.dart';
 import 'status.dart';
 import 'top_clinics_doctors_screen.dart';
+import 'phone_verification_screen.dart';
 
 class BottomNav extends StatefulWidget {
   const BottomNav({super.key});
@@ -25,6 +27,7 @@ class BottomNavWithInitialIndex extends StatefulWidget {
 
 class _BottomNavState extends State<BottomNav> {
   int _selectedIndex = 0;
+  bool _verificationPromptShown = false;
 
   static final List<Widget> _widgetOptions = <Widget>[
     const Homescreen(),
@@ -32,6 +35,70 @@ class _BottomNavState extends State<BottomNav> {
     const Status(),
     const Profile(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showPhoneVerificationPrompt();
+    });
+  }
+
+  Future<void> _showPhoneVerificationPrompt() async {
+    if (_verificationPromptShown) return;
+
+    final patientProvider = Provider.of<PatientProvider>(
+      context,
+      listen: false,
+    );
+    await patientProvider.loadPatientProfile();
+    if (!mounted) return;
+
+    final patient = patientProvider.patientData;
+    if (patient == null || patient['phoneVerified'] == true) return;
+
+    _verificationPromptShown = true;
+    final verifyNow = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(
+          Icons.chat_rounded,
+          color: Color(0xFF128C4A),
+          size: 34,
+        ),
+        title: const Text('Verify your phone number'),
+        content: const Text(
+          'Verify through WhatsApp so Intezo can confirm that this phone number belongs to you. It is free and takes about a minute.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF128C4A),
+            ),
+            child: const Text('Verify now'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || verifyNow != true) return;
+    final verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PhoneVerificationScreen(
+          initialPhone: patient['phone']?.toString() ?? '',
+        ),
+      ),
+    );
+    if (verified == true) {
+      await patientProvider.loadPatientProfile();
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {

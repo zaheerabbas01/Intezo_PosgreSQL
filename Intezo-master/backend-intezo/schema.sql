@@ -76,6 +76,12 @@ CREATE TABLE patients (
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   phone VARCHAR(50) NOT NULL UNIQUE,
+  phone_verified BOOLEAN NOT NULL DEFAULT false,
+  phone_verified_at TIMESTAMPTZ,
+  whatsapp_verification_phone VARCHAR(32),
+  whatsapp_verification_token_hash VARCHAR(64),
+  whatsapp_verification_expires_at TIMESTAMPTZ,
+  whatsapp_verification_requested_at TIMESTAMPTZ,
   email_verified BOOLEAN DEFAULT false,
   verification_code VARCHAR(255),
   verification_code_expires TIMESTAMP,
@@ -90,6 +96,14 @@ CREATE TABLE patients (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX patients_whatsapp_verification_token_unique_idx
+ON patients (whatsapp_verification_token_hash)
+WHERE whatsapp_verification_token_hash IS NOT NULL;
+
+CREATE UNIQUE INDEX patients_whatsapp_pending_phone_unique_idx
+ON patients (whatsapp_verification_phone)
+WHERE whatsapp_verification_phone IS NOT NULL;
 
 -- Queues table
 CREATE TABLE queues (

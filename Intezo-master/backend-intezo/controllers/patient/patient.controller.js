@@ -16,7 +16,16 @@ export const registerPatient = async (req, res) => {
 
 export const getPatientProfile = async (req, res) => {
   try {
-    const patient = await Patient.findByPk(req.patient.id, { attributes: { exclude: ['password'] } });
+    const patient = await Patient.findByPk(req.patient.id, {
+      attributes: {
+        exclude: [
+          'password',
+          'verificationCode',
+          'verificationCodeExpires',
+          'whatsappVerificationTokenHash'
+        ]
+      }
+    });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
     res.json(patient);
   } catch (err) {

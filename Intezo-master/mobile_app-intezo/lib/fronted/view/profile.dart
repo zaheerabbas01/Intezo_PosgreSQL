@@ -5,6 +5,7 @@ import '../../providers/theme_provider.dart';
 import './booking_history_screen.dart';
 import './premium_payment_screen.dart';
 import './reports_screen.dart';
+import './phone_verification_screen.dart';
 
 import '../res/components/wigets/aboutscreen.dart';
 import '../res/components/wigets/colors.dart';
@@ -33,6 +34,7 @@ class _ProfileState extends State<Profile> {
     final isDarkMode = themeProvider.isDarkMode;
     final patientProvider = Provider.of<PatientProvider>(context);
     final patientData = patientProvider.patientData;
+    final phoneVerified = patientData?['phoneVerified'] == true;
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
@@ -135,6 +137,46 @@ class _ProfileState extends State<Profile> {
                             color: context.subtextColor,
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: phoneVerified
+                                ? Colors.green.withValues(alpha: 0.12)
+                                : Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                phoneVerified
+                                    ? Icons.verified_rounded
+                                    : Icons.info_outline_rounded,
+                                size: 17,
+                                color: phoneVerified
+                                    ? Colors.green.shade700
+                                    : Colors.orange.shade800,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                phoneVerified
+                                    ? 'WhatsApp verified'
+                                    : 'Phone not verified',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: phoneVerified
+                                      ? Colors.green.shade700
+                                      : Colors.orange.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -153,6 +195,15 @@ class _ProfileState extends State<Profile> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (!phoneVerified) ...[
+                          _buildMenuItem(
+                            icon: Icons.chat_outlined,
+                            title: "Verify phone with WhatsApp",
+                            isDarkMode: isDarkMode,
+                            onTap: () => _openPhoneVerification(patientData),
+                          ),
+                          _buildDivider(isDarkMode),
+                        ],
                         _buildMenuItem(
                           icon: Icons.history,
                           title: "History",
@@ -269,6 +320,24 @@ class _ProfileState extends State<Profile> {
               ),
             ),
     );
+  }
+
+  Future<void> _openPhoneVerification(Map<String, dynamic> patientData) async {
+    final verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PhoneVerificationScreen(
+          initialPhone: patientData['phone']?.toString() ?? '',
+        ),
+      ),
+    );
+
+    if (verified == true && mounted) {
+      await Provider.of<PatientProvider>(
+        context,
+        listen: false,
+      ).loadPatientProfile();
+    }
   }
 
   Widget _buildMenuItem({

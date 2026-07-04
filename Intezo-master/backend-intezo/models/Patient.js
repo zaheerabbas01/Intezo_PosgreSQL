@@ -25,6 +25,26 @@ const Patient = sequelize.define('Patient', {
     allowNull: false,
     unique: true
   },
+  phoneVerified: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  phoneVerifiedAt: {
+    type: DataTypes.DATE
+  },
+  whatsappVerificationPhone: {
+    type: DataTypes.STRING
+  },
+  whatsappVerificationTokenHash: {
+    type: DataTypes.STRING(64)
+  },
+  whatsappVerificationExpiresAt: {
+    type: DataTypes.DATE
+  },
+  whatsappVerificationRequestedAt: {
+    type: DataTypes.DATE
+  },
   emailVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
