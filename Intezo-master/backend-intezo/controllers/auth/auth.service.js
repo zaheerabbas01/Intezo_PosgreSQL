@@ -7,6 +7,10 @@ import { logActivity, publishAdminUpdate } from '../../utils/helpers.js';
 
 export const createToken = (user, role) => jwt.sign({ id: user.id, email: user.email, role: role || user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+// TESTING ONLY: when SKIP_EMAIL_VERIFICATION=true, patient email verification is
+// bypassed (no email is sent and any code is accepted). Leave unset in production.
+const skipPatientEmailVerification = () => process.env.SKIP_EMAIL_VERIFICATION === 'true';
+
 const validateCode = (record, code) => {
   const storedCode = String(record.verificationCode || '').trim();
   const submittedCode = String(code || '').trim();
@@ -27,7 +31,9 @@ export const initiatePatientRegistration = async (userData) => {
   if (existingPatient) throw new Error(`Patient already exists with this ${existingPatient.email === email ? 'email' : 'phone number'}`);
   const verificationCode = emailService.generateVerificationCode();
   const pendingUser = await PendingUser.create({ userData: { name, email, phone }, userType: 'patient', verificationCode, verificationCodeExpires: new Date(Date.now() + 60 * 1000) });
-  if (!await emailService.sendVerificationEmail(email, verificationCode, 'Patient')) throw new Error('Failed to send verification email');
+  if (!skipPatientEmailVerification()) {
+    if (!await emailService.sendVerificationEmail(email, verificationCode, 'Patient')) throw new Error('Failed to send verification email');
+  }
   return pendingUser.id;
 };
 
@@ -43,6 +49,9 @@ export const handlePatientLogin = async (email) => {
   }
   const patient = await Patient.findOne({ where: { email } });
   if (!patient) throw new Error('Patient not found');
+  if (skipPatientEmailVerification()) {
+    return { isDemo: true, token: createToken(patient, 'patient'), patient };
+  }
   const verificationCode = emailService.generateVerificationCode();
   await patient.update({ verificationCode, verificationCodeExpires: new Date(Date.now() + 10 * 60 * 1000) });
   await emailService.sendVerificationEmail(email, verificationCode, 'Patient');
@@ -149,11 +158,12 @@ export const verifyClinicStatus = async (clinicId, verificationCode) => {
 };
 
 export const verifyPatientStatus = async (patientId, verificationCode) => {
+  const skipVerification = skipPatientEmailVerification();
   const pendingUser = await PendingUser.findByPk(patientId);
-  if (pendingUser) { validateCode(pendingUser, verificationCode); const patient = await Patient.create({ ...pendingUser.userData, emailVerified: true }); await pendingUser.destroy(); return { type: 'REGISTRATION_SUCCESS', token: createToken(patient, 'patient'), patient }; }
+  if (pendingUser) { if (!skipVerification) validateCode(pendingUser, verificationCode); const patient = await Patient.create({ ...pendingUser.userData, emailVerified: true }); await pendingUser.destroy(); return { type: 'REGISTRATION_SUCCESS', token: createToken(patient, 'patient'), patient }; }
   const patient = await Patient.findByPk(patientId);
   if (!patient) throw new Error('Patient not found');
-  if (patient.compareVerificationCode) { if (!(await patient.compareVerificationCode(verificationCode))) throw new Error('Invalid verification code'); } else { validateCode(patient, verificationCode); }
+  if (!skipVerification) { if (patient.compareVerificationCode) { if (!(await patient.compareVerificationCode(verificationCode))) throw new Error('Invalid verification code'); } else { validateCode(patient, verificationCode); } }
   await patient.update({ emailVerified: true, verificationCode: null, verificationCodeExpires: null });
   const token = createToken(patient, 'patient');
   await handleUserOnlineTracking(patient, 'patient');
