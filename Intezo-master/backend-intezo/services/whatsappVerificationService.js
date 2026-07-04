@@ -206,13 +206,23 @@ const extractVerificationToken = (message) => {
 
 export const verifyIncomingWhatsAppMessage = async ({ from, message }) => {
   const token = extractVerificationToken(message);
-  if (!token) return { matched: false, verified: false };
+  if (!token) {
+    return {
+      matched: false,
+      verified: false,
+      reason: 'verification_token_missing'
+    };
+  }
 
   let sender;
   try {
     sender = normalizePakistaniPhone(from);
   } catch {
-    return { matched: true, verified: false };
+    return {
+      matched: true,
+      verified: false,
+      reason: 'sender_phone_invalid'
+    };
   }
 
   return sequelize.transaction(async (transaction) => {
@@ -222,7 +232,13 @@ export const verifyIncomingWhatsAppMessage = async ({ from, message }) => {
       lock: transaction.LOCK.UPDATE
     });
 
-    if (!patient) return { matched: true, verified: false };
+    if (!patient) {
+      return {
+        matched: true,
+        verified: false,
+        reason: 'verification_token_not_found'
+      };
+    }
 
     const expiresAt = patient.whatsappVerificationExpiresAt
       ? new Date(patient.whatsappVerificationExpiresAt).getTime()
@@ -233,11 +249,19 @@ export const verifyIncomingWhatsAppMessage = async ({ from, message }) => {
         whatsappVerificationTokenHash: null,
         whatsappVerificationExpiresAt: null
       }, { transaction });
-      return { matched: true, verified: false };
+      return {
+        matched: true,
+        verified: false,
+        reason: 'verification_token_expired'
+      };
     }
 
     if (patient.whatsappVerificationPhone !== sender.e164) {
-      return { matched: true, verified: false };
+      return {
+        matched: true,
+        verified: false,
+        reason: 'sender_phone_mismatch'
+      };
     }
 
     const existingPatient = await findPatientUsingPhone(
@@ -251,7 +275,11 @@ export const verifyIncomingWhatsAppMessage = async ({ from, message }) => {
         whatsappVerificationTokenHash: null,
         whatsappVerificationExpiresAt: null
       }, { transaction });
-      return { matched: true, verified: false };
+      return {
+        matched: true,
+        verified: false,
+        reason: 'phone_already_in_use'
+      };
     }
 
     await patient.update({
@@ -263,7 +291,12 @@ export const verifyIncomingWhatsAppMessage = async ({ from, message }) => {
       whatsappVerificationExpiresAt: null
     }, { transaction });
 
-    return { matched: true, verified: true, patientId: patient.id };
+    return {
+      matched: true,
+      verified: true,
+      patientId: patient.id,
+      reason: 'verified'
+    };
   });
 };
 
