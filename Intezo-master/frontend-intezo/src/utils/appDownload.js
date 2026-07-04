@@ -1,6 +1,7 @@
 export const APP_RELEASE_MANIFEST_URL = 'https://tawakkalna-3ffc6.web.app/latest.json';
 export const APP_DOWNLOAD_PAGE_URL = 'https://tawakkalna-3ffc6.web.app/';
 export const APP_DOWNLOAD_FALLBACK_URL = 'https://apk.intezo.online/intezo-app-latest.apk';
+const DEFAULT_ANDROID_ABI = 'arm64-v8a';
 
 const getAndroidDevice = () => {
   const userAgent = navigator.userAgent || '';
@@ -25,7 +26,9 @@ const detectAndroidAbi = async () => {
 
   if (/arm64|aarch64|armv8/i.test(userAgent)) return 'arm64-v8a';
   if (/armv7|armeabi/i.test(userAgent)) return 'armeabi-v7a';
-  return null;
+  // Most current Android phones are ARM64. Browsers commonly hide CPU details,
+  // so prefer the smaller ARM64 APK instead of automatically serving Universal.
+  return DEFAULT_ANDROID_ABI;
 };
 
 export const resolveAppDownload = async () => {
@@ -50,8 +53,8 @@ export const resolveAppDownload = async () => {
 
   return {
     url: selectedDownload.url,
-    abi: detectedAbi || 'universal',
+    abi: detectedAbi,
     versionName: manifest.versionName,
-    usedUniversalFallback: !detectedAbi
+    usedUniversalFallback: selectedDownload === manifest.downloads?.universal
   };
 };

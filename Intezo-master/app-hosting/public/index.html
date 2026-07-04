@@ -202,12 +202,12 @@
           if (architecture.includes("arm") && bitness === "32") return { abi: "armeabi-v7a", confident: true, android: true };
         }
       } catch (_) {
-        // The universal APK remains the safe fallback.
+        // Browser privacy settings can hide CPU details.
       }
 
       if (/arm64|aarch64|armv8/i.test(ua)) return { abi: "arm64-v8a", confident: true, android: true };
       if (/armv7|armeabi/i.test(ua)) return { abi: "armeabi-v7a", confident: true, android: true };
-      return { abi: "universal", confident: false, android: true };
+      return { abi: "arm64-v8a", confident: false, android: true };
     }
 
     async function initialize() {
@@ -235,7 +235,7 @@
         recommendation.textContent = detection.confident
           ? `Recommended package detected: ${labels[detection.abi]}.`
           : detection.android
-            ? "Your browser did not reveal the CPU type, so Universal is selected for compatibility."
+            ? "Your browser hides its CPU type, so ARM64 is selected for most current phones. If it cannot be installed, choose ARM 32-bit or Universal below."
             : "Open this page on Android for automatic device selection.";
 
         Object.entries(manifest.downloads).forEach(([abi, download]) => {
