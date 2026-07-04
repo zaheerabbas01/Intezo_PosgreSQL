@@ -116,21 +116,25 @@ export const swaggerSpec = {
     '/auth/register/patient': {
       post: {
         tags: ['Auth'],
-        summary: 'Register a patient',
-        description: 'Create a new patient account and optionally send verification email.',
+        summary: 'Start passwordless patient registration',
+        description: 'Start WhatsApp verification using only the patient name and Pakistani mobile number.',
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                additionalProperties: true
+                required: ['name', 'phone'],
+                properties: {
+                  name: { type: 'string' },
+                  phone: { type: 'string', example: '03342407631' }
+                }
               }
             }
           }
         },
         responses: {
-          200: { description: 'Patient registration initiated successfully' },
+          201: { description: 'WhatsApp registration challenge created' },
           400: { $ref: '#/components/responses/BadRequestError' },
           500: { $ref: '#/components/responses/InternalServerError' }
         }
@@ -139,28 +143,24 @@ export const swaggerSpec = {
     '/auth/login/patient': {
       post: {
         tags: ['Auth'],
-        summary: 'Login a patient',
+        summary: 'Start passwordless patient login',
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                additionalProperties: true
+                required: ['phone'],
+                properties: {
+                  phone: { type: 'string', example: '03342407631' }
+                }
               }
             }
           }
         },
         responses: {
           200: {
-            description: 'Patient authenticated',
-            content: {
-              'application/json': {
-                schema: {
-                  $ref: '#/components/schemas/AuthResponse'
-                }
-              }
-            }
+            description: 'WhatsApp login challenge created'
           },
           400: { $ref: '#/components/responses/BadRequestError' },
           401: { $ref: '#/components/responses/UnauthorizedError' },
@@ -1608,6 +1608,33 @@ export const swaggerSpec = {
         security: [{ BearerAuth: [] }],
         responses: {
           200: { description: 'Premium payments returned' },
+          401: { $ref: '#/components/responses/UnauthorizedError' },
+          500: { $ref: '#/components/responses/InternalServerError' }
+        }
+      }
+    },
+    '/auth/patient/phone/status': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Complete passwordless patient authentication',
+        description: 'Poll with the private challenge credentials until WhatsApp verifies the phone number.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['requestId', 'pollToken'],
+                properties: {
+                  requestId: { type: 'string', format: 'uuid' },
+                  pollToken: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Challenge pending or patient authenticated' },
           401: { $ref: '#/components/responses/UnauthorizedError' },
           500: { $ref: '#/components/responses/InternalServerError' }
         }

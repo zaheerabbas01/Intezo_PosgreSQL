@@ -211,7 +211,7 @@ export const joinQueue = async (patientId, clinicId, doctorId) => {
   const [clinic, doctor, patient] = await Promise.all([Clinic.findByPk(clinicId), Doctor.findByPk(doctorId), Patient.findByPk(patientId)]);
   if (!clinic?.isOpen) throw new Error('Clinic is currently closed');
   if (!doctor?.isActive || !doctor?.isAvailable) throw new Error('Doctor is not available');
-  if (!patient.emailVerified) throw new Error('Email not verified');
+  if (!patient.phoneVerified) throw new Error('Phone number not verified');
   const isPremiumActive = patient.isPremium && patient.premiumExpiresAt > new Date();
   const activeQueues = await Queue.findAll({ where: { patientId, status: 'waiting' } });
   if (activeQueues.length > 0) {

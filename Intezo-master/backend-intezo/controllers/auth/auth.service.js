@@ -4,8 +4,17 @@ import { json, Op, where as sequelizeWhere } from 'sequelize';
 import jwt from 'jsonwebtoken';
 import emailService from '../../services/emailService.js';
 import { logActivity, publishAdminUpdate } from '../../utils/helpers.js';
+import {
+  getPatientAuthChallengeStatus,
+  startPatientAuthChallenge
+} from '../../services/whatsappVerificationService.js';
 
-export const createToken = (user, role) => jwt.sign({ id: user.id, email: user.email, role: role || user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+export const createToken = (user, role) => jwt.sign({
+  id: user.id,
+  role: role || user.role,
+  ...(user.email ? { email: user.email } : {}),
+  ...(user.phone ? { phone: user.phone } : {})
+}, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 // TESTING ONLY: when SKIP_EMAIL_VERIFICATION=true, patient email verification is
 // bypassed (no email is sent and any code is accepted). Leave unset in production.
@@ -26,36 +35,37 @@ async function handleUserOnlineTracking(user, role) {
 }
 
 export const initiatePatientRegistration = async (userData) => {
-  const { name, email, phone } = userData;
-  const existingPatient = await Patient.findOne({ where: { [Op.or]: [{ email }, { phone }] } });
-  if (existingPatient) throw new Error(`Patient already exists with this ${existingPatient.email === email ? 'email' : 'phone number'}`);
-  const verificationCode = emailService.generateVerificationCode();
-  const pendingUser = await PendingUser.create({ userData: { name, email, phone }, userType: 'patient', verificationCode, verificationCodeExpires: new Date(Date.now() + 60 * 1000) });
-  if (!skipPatientEmailVerification()) {
-    if (!await emailService.sendVerificationEmail(email, verificationCode, 'Patient')) throw new Error('Failed to send verification email');
-  }
-  return pendingUser.id;
+  return startPatientAuthChallenge({
+    purpose: 'register',
+    name: userData.name,
+    phone: userData.phone
+  });
 };
 
-export const handlePatientLogin = async (email) => {
-  if (
-    process.env.NODE_ENV !== 'production' &&
-    process.env.ENABLE_DEMO_LOGIN === 'true' &&
-    email === 'demo.patient@intezo.com'
-  ) {
-    let patient = await Patient.findOne({ where: { email } });
-    if (!patient) patient = await Patient.create({ name: 'Demo Patient', email, phone: '+974-5555-0002', emailVerified: true });
-    return { isDemo: true, token: createToken(patient, 'patient'), patient };
+export const handlePatientLogin = async (phone) => {
+  return startPatientAuthChallenge({
+    purpose: 'login',
+    phone
+  });
+};
+
+export const completePatientPhoneAuth = async (requestId, pollToken) => {
+  const result = await getPatientAuthChallengeStatus({
+    requestId,
+    pollToken
+  });
+
+  if (!result.verified) return result;
+
+  if (result.completedNow) {
+    await handleUserOnlineTracking(result.patient, 'patient');
   }
-  const patient = await Patient.findOne({ where: { email } });
-  if (!patient) throw new Error('Patient not found');
-  if (skipPatientEmailVerification()) {
-    return { isDemo: true, token: createToken(patient, 'patient'), patient };
-  }
-  const verificationCode = emailService.generateVerificationCode();
-  await patient.update({ verificationCode, verificationCodeExpires: new Date(Date.now() + 10 * 60 * 1000) });
-  await emailService.sendVerificationEmail(email, verificationCode, 'Patient');
-  return { isDemo: false, patientId: patient.id };
+
+  return {
+    verified: true,
+    token: createToken(result.patient, 'patient'),
+    patient: result.patient
+  };
 };
 
 export const initiateClinicRegistration = async (clinicData) => {

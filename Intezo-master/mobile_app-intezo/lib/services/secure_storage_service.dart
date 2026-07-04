@@ -14,6 +14,7 @@ class SecureStorageService {
   static const String _patientPhoneKey = 'patient_phone';
   static const String _pendingFcmTokenKey = 'pending_fcm_token';
   static const String _databaseKey = 'local_database_key';
+  static const String _patientAuthChallengeKey = 'patient_auth_challenge';
 
   static Future<void> migrateLegacySession() async {
     final prefs = await SharedPreferences.getInstance();
@@ -76,8 +77,12 @@ class SecureStorageService {
       _storage.read(key: _patientEmailKey),
       _storage.read(key: _patientPhoneKey),
     ]);
-    if (values.any((value) => value == null || value.isEmpty)) return null;
-    return {'name': values[0]!, 'email': values[1]!, 'phone': values[2]!};
+    final name = values[0];
+    final phone = values[2];
+    if (name == null || name.isEmpty || phone == null || phone.isEmpty) {
+      return null;
+    }
+    return {'name': name, 'email': values[1] ?? '', 'phone': phone};
   }
 
   static Future<void> savePendingFcmToken(String token) =>
@@ -89,6 +94,27 @@ class SecureStorageService {
   static Future<void> deletePendingFcmToken() =>
       _storage.delete(key: _pendingFcmTokenKey);
 
+  static Future<void> savePatientAuthChallenge(Map<String, dynamic> challenge) {
+    return _storage.write(
+      key: _patientAuthChallengeKey,
+      value: jsonEncode(challenge),
+    );
+  }
+
+  static Future<Map<String, dynamic>?> readPatientAuthChallenge() async {
+    final value = await _storage.read(key: _patientAuthChallengeKey);
+    if (value == null || value.isEmpty) return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(value));
+    } catch (_) {
+      await clearPatientAuthChallenge();
+      return null;
+    }
+  }
+
+  static Future<void> clearPatientAuthChallenge() =>
+      _storage.delete(key: _patientAuthChallengeKey);
+
   static Future<void> clearSession() async {
     await Future.wait([
       _storage.delete(key: _tokenKey),
@@ -97,6 +123,7 @@ class SecureStorageService {
       _storage.delete(key: _patientEmailKey),
       _storage.delete(key: _patientPhoneKey),
       _storage.delete(key: _pendingFcmTokenKey),
+      _storage.delete(key: _patientAuthChallengeKey),
     ]);
 
     final prefs = await SharedPreferences.getInstance();

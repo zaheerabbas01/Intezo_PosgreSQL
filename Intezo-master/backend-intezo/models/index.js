@@ -6,6 +6,7 @@ import Queue from './Queue.js';
 import Report from './Report.js';
 import PendingUser from './PendingUser.js';
 import PremiumPayment from './PremiumPayment.js';
+import PatientAuthChallenge from './PatientAuthChallenge.js';
 
 // Queue associations
 Queue.belongsTo(Clinic, { foreignKey: 'clinicId', as: 'clinic' });
@@ -39,5 +40,6 @@ export {
   Queue,
   Report,
   PendingUser,
-  PremiumPayment
+  PremiumPayment,
+  PatientAuthChallenge
 };

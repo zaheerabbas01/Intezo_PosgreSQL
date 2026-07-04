@@ -1,4 +1,6 @@
 export const sendPremiumStatusEmail = async (patient, status, reason = '') => {
+  if (!patient.email) return false;
+
   const isApproved = status === 'approved';
   const mailOptions = {
     to: patient.email,

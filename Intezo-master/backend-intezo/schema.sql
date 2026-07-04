@@ -74,7 +74,7 @@ CREATE TABLE doctors (
 CREATE TABLE patients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) NOT NULL UNIQUE,
+  email VARCHAR(255) UNIQUE,
   phone VARCHAR(50) NOT NULL UNIQUE,
   phone_verified BOOLEAN NOT NULL DEFAULT false,
   phone_verified_at TIMESTAMPTZ,
@@ -104,6 +104,21 @@ WHERE whatsapp_verification_token_hash IS NOT NULL;
 CREATE UNIQUE INDEX patients_whatsapp_pending_phone_unique_idx
 ON patients (whatsapp_verification_phone)
 WHERE whatsapp_verification_phone IS NOT NULL;
+
+CREATE TABLE patient_auth_challenges (
+  id UUID PRIMARY KEY,
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  purpose VARCHAR(16) NOT NULL CHECK (purpose IN ('login', 'register')),
+  name VARCHAR(120),
+  phone VARCHAR(32) NOT NULL,
+  message_token_hash VARCHAR(64) NOT NULL UNIQUE,
+  poll_token_hash VARCHAR(64) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  verified_at TIMESTAMPTZ,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Queues table
 CREATE TABLE queues (

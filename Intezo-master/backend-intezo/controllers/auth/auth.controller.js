@@ -1,51 +1,91 @@
 import * as authService from './auth.service.js';
 
+const patientResponse = (patient) => ({
+  _id: patient.id,
+  id: patient.id,
+  name: patient.name,
+  email: patient.email,
+  phone: patient.phone,
+  phoneVerified: patient.phoneVerified,
+  phoneVerifiedAt: patient.phoneVerifiedAt,
+  isPremium: patient.isPremium,
+  premiumExpiresAt: patient.premiumExpiresAt,
+  createdAt: patient.createdAt,
+  updatedAt: patient.updatedAt
+});
+
 export const registerPatient = async (req, res) => {
   try {
-    const { name, email, phone } = req.body;
-    if (!name || !email || !phone) {
-      return res.status(400).json({ error: 'Name, email and phone are required' });
+    const { name, phone } = req.body;
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone number are required' });
     }
 
-    const pendingId = await authService.initiatePatientRegistration({ name, email, phone });
+    const challenge = await authService.initiatePatientRegistration({
+      name,
+      phone
+    });
 
+    res.set('Cache-Control', 'no-store');
     res.status(201).json({
-      message: 'Verification code sent to your email. Please verify to complete registration.',
-      tip: "If you don't see the email, please check your spam/junk folder.",
-      pendingId,
-      requiresVerification: true
+      message: 'Send the prepared WhatsApp message to verify your number.',
+      ...challenge
     });
   } catch (err) {
-    const status = err.message.includes('already exists') || err.message.includes('pending admin approval') ? 409 : 500;
+    const status = err.status || 500;
     res.status(status).json({ error: err.message });
   }
 };
 
 export const patientLogin = async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
 
-    const result = await authService.handlePatientLogin(email);
+    const challenge = await authService.handlePatientLogin(phone);
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      message: 'Send the prepared WhatsApp message to sign in.',
+      ...challenge
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message });
+  }
+};
 
-    if (result.isDemo) {
-      return res.json({
-        message: 'Demo patient login successful',
-        token: result.token,
-        patient: result.patient
+export const patientPhoneAuthStatus = async (req, res) => {
+  try {
+    const { requestId, pollToken } = req.body;
+    if (!requestId || !pollToken) {
+      return res.status(400).json({
+        error: 'Verification request ID and polling token are required'
       });
     }
 
-    // Standard flow requires verification
-    return res.status(403).json({ 
-      error: 'Verification code sent to your email.',
-      tip: "If you don't see the email, please check your spam/junk folder.",
-      patientId: result.patientId,
-      requiresVerification: true
+    const result = await authService.completePatientPhoneAuth(
+      requestId,
+      pollToken
+    );
+    res.set('Cache-Control', 'no-store');
+
+    if (!result.verified) {
+      return res.json(result);
+    }
+
+    return res.json({
+      verified: true,
+      token: result.token,
+      patient: patientResponse(result.patient)
     });
   } catch (err) {
-    const status = err.message === 'Patient not found' ? 404 : 500;
-    res.status(status).json({ error: err.message });
+    const status = err.status || 500;
+    const message = status === 500
+      ? 'Unable to check phone verification.'
+      : err.message;
+    return res.status(status).json({ error: message });
   }
 };
 

@@ -47,9 +47,19 @@ app.use(helmet({
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.AUTH_RATE_LIMIT || 30),
+  skip: (req) =>
+    req.originalUrl.startsWith('/api/auth/patient/phone/status'),
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts. Please try again later.' }
+});
+
+const patientPhoneStatusLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 400,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many verification checks. Please start again later.' }
 });
 
 const phoneVerificationLimiter = rateLimit({
@@ -69,6 +79,7 @@ app.use([
   '/api/doctors/register'
 ], authLimiter);
 app.use('/api/phone-verification/start', phoneVerificationLimiter);
+app.use('/api/auth/patient/phone/status', patientPhoneStatusLimiter);
 
 // Initialize queue counters
 const initializeQueueCounters = async () => {

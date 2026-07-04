@@ -20,16 +20,13 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>> login(String email) async {
+  Future<Map<String, dynamic>> login(String phone) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await AuthService.patientLogin(email);
-      if (result['success']) {
-        _isLoggedIn = true;
-      }
+      final result = await AuthService.patientLogin(phone);
       _isLoading = false;
       notifyListeners();
       return result;
@@ -41,17 +38,13 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> register(
-    String name,
-    String email,
-    String phone,
-  ) async {
+  Future<Map<String, dynamic>> register(String name, String phone) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await AuthService.registerPatient(name, email, phone);
+      final result = await AuthService.registerPatient(name, phone);
       _isLoading = false;
       notifyListeners();
       return result;
@@ -63,40 +56,25 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> verifyEmail(String pendingId, String code) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
+  Future<bool> completePhoneAuth(String requestId, String pollToken) async {
     try {
-      final result = await AuthService.verifyPatientEmail(pendingId, code);
+      final result = await AuthService.completePatientPhoneAuth(
+        requestId,
+        pollToken,
+      );
       if (result['success'] == true) {
         _isLoggedIn = true;
+        _error = null;
+        notifyListeners();
+        return true;
       }
-      _isLoading = false;
-      notifyListeners();
-      return result['success'] == true;
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
+      if (_error != null) {
+        _error = null;
+        notifyListeners();
+      }
       return false;
-    }
-  }
-
-  Future<bool> resendVerification(String pendingId) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final success = await AuthService.resendPatientVerification(pendingId);
-      _isLoading = false;
-      notifyListeners();
-      return success;
     } catch (e) {
       _error = e.toString();
-      _isLoading = false;
       notifyListeners();
       return false;
     }

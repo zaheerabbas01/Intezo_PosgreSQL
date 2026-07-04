@@ -14,7 +14,8 @@ import {
   resendDoctorVerification,
   loginAdmin,
   verifyAdminEmail,
-  logoutUser
+  logoutUser,
+  patientPhoneAuthStatus
 } from '../controllers/auth/auth.controller.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ const router = express.Router();
 // Patient routes
 router.post('/register/patient', registerPatient);
 router.post('/login/patient', patientLogin);
+router.post('/patient/phone/status', patientPhoneAuthStatus);
 router.post('/verify/patient', verifyPatientEmail);
 router.post('/resend/patient', resendPatientVerification);
 

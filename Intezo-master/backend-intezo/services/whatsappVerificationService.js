@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
-import { QueryTypes, UniqueConstraintError } from 'sequelize';
+import { Op, QueryTypes, UniqueConstraintError } from 'sequelize';
 
 import sequelize from '../config/database.js';
 import Patient from '../models/Patient.js';
+import PatientAuthChallenge from '../models/PatientAuthChallenge.js';
 
 const TOKEN_PREFIX = 'INZ-';
 const TOKEN_TTL_MS = 10 * 60 * 1000;
@@ -81,6 +82,28 @@ const findPatientUsingPhone = async (nationalNumber, patientId, transaction) => 
   );
 
   return matches[0] || null;
+};
+
+const findPatientByPhone = async (nationalNumber, transaction) => {
+  const matches = await sequelize.query(
+    `
+      SELECT id
+      FROM public.patients
+      WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = :nationalNumber
+      LIMIT 1
+    `,
+    {
+      replacements: { nationalNumber },
+      type: QueryTypes.SELECT,
+      transaction
+    }
+  );
+
+  if (!matches[0]) return null;
+  return Patient.findByPk(matches[0].id, {
+    transaction,
+    lock: transaction ? transaction.LOCK.UPDATE : undefined
+  });
 };
 
 const clearExpiredVerification = async (patient) => {
@@ -199,6 +222,131 @@ export const getPhoneVerificationStatus = async (patientId) => {
   };
 };
 
+const validatePatientName = (value) => {
+  const name = String(value || '').trim().replace(/\s+/g, ' ');
+  if (name.length < 2 || name.length > 120) {
+    throw new PhoneVerificationError(
+      'Enter your full name using between 2 and 120 characters.'
+    );
+  }
+  return name;
+};
+
+export const startPatientAuthChallenge = async ({
+  purpose,
+  name,
+  phone
+}) => {
+  if (!['login', 'register'].includes(purpose)) {
+    throw new PhoneVerificationError('Invalid authentication request.');
+  }
+
+  const businessPhone = getBusinessPhoneDigits();
+  const normalizedPhone = normalizePakistaniPhone(phone);
+  const patient = await findPatientByPhone(normalizedPhone.nationalNumber);
+
+  if (purpose === 'login' && !patient) {
+    throw new PhoneVerificationError(
+      'No patient account was found for this phone number.',
+      404
+    );
+  }
+  if (purpose === 'register' && patient) {
+    throw new PhoneVerificationError(
+      'This phone number is already registered. Please sign in instead.',
+      409
+    );
+  }
+
+  const normalizedName = purpose === 'register'
+    ? validatePatientName(name)
+    : null;
+  const messageToken = `${TOKEN_PREFIX}${crypto.randomBytes(24).toString('base64url')}`;
+  const pollToken = crypto.randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+  const message = `Verify my Intezo account: ${messageToken}`;
+
+  await PatientAuthChallenge.destroy({
+    where: {
+      expiresAt: {
+        [Op.lt]: new Date(Date.now() - 24 * 60 * 60 * 1000)
+      }
+    }
+  });
+
+  await PatientAuthChallenge.destroy({
+    where: {
+      phone: normalizedPhone.e164,
+      purpose,
+      verifiedAt: null
+    }
+  });
+
+  const challenge = await PatientAuthChallenge.create({
+    patientId: patient?.id || null,
+    purpose,
+    name: normalizedName,
+    phone: normalizedPhone.e164,
+    messageTokenHash: hashToken(messageToken),
+    pollTokenHash: hashToken(pollToken),
+    expiresAt
+  });
+
+  return {
+    requestId: challenge.id,
+    pollToken,
+    phone: normalizedPhone.e164,
+    whatsappUrl: `https://wa.me/${businessPhone}?text=${encodeURIComponent(message)}`,
+    expiresAt: expiresAt.toISOString(),
+    pollAfterSeconds: 3,
+    requiresVerification: true
+  };
+};
+
+export const getPatientAuthChallengeStatus = async ({
+  requestId,
+  pollToken
+}) => {
+  const challenge = await PatientAuthChallenge.findByPk(requestId);
+  if (
+    !challenge ||
+    !pollToken ||
+    !secureStringEqual(challenge.pollTokenHash, hashToken(pollToken))
+  ) {
+    throw new PhoneVerificationError('Invalid verification request.', 401);
+  }
+
+  if (new Date(challenge.expiresAt).getTime() <= Date.now()) {
+    throw new PhoneVerificationError(
+      'This verification request expired. Please start again.',
+      410
+    );
+  }
+
+  if (!challenge.verifiedAt || !challenge.patientId) {
+    return {
+      verified: false,
+      expiresAt: challenge.expiresAt.toISOString()
+    };
+  }
+
+  const patient = await Patient.findByPk(challenge.patientId);
+  if (!patient) {
+    throw new PhoneVerificationError('Patient account not found.', 404);
+  }
+
+  const completedNow = !challenge.consumedAt;
+  if (completedNow) {
+    await challenge.update({ consumedAt: new Date() });
+  }
+
+  return {
+    verified: true,
+    completedNow,
+    patient
+  };
+};
+
 const extractVerificationToken = (message) => {
   const match = String(message || '').match(VERIFICATION_MESSAGE_PATTERN);
   return match?.[1] || null;
@@ -233,10 +381,79 @@ export const verifyIncomingWhatsAppMessage = async ({ from, message }) => {
     });
 
     if (!patient) {
+      const challenge = await PatientAuthChallenge.findOne({
+        where: { messageTokenHash: hashToken(token) },
+        transaction,
+        lock: transaction.LOCK.UPDATE
+      });
+
+      if (!challenge) {
+        return {
+          matched: true,
+          verified: false,
+          reason: 'verification_token_not_found'
+        };
+      }
+
+      const challengeExpiresAt = new Date(challenge.expiresAt).getTime();
+      if (challengeExpiresAt <= Date.now()) {
+        return {
+          matched: true,
+          verified: false,
+          reason: 'verification_token_expired'
+        };
+      }
+
+      if (challenge.phone !== sender.e164) {
+        return {
+          matched: true,
+          verified: false,
+          reason: 'sender_phone_mismatch'
+        };
+      }
+
+      let authPatient = challenge.patientId
+        ? await Patient.findByPk(challenge.patientId, {
+            transaction,
+            lock: transaction.LOCK.UPDATE
+          })
+        : await findPatientByPhone(sender.nationalNumber, transaction);
+
+      if (challenge.purpose === 'login' && !authPatient) {
+        return {
+          matched: true,
+          verified: false,
+          reason: 'patient_not_found'
+        };
+      }
+
+      if (!authPatient) {
+        authPatient = await Patient.create({
+          name: challenge.name,
+          email: null,
+          phone: sender.e164,
+          phoneVerified: true,
+          phoneVerifiedAt: new Date(),
+          emailVerified: false
+        }, { transaction });
+      } else {
+        await authPatient.update({
+          phone: sender.e164,
+          phoneVerified: true,
+          phoneVerifiedAt: new Date()
+        }, { transaction });
+      }
+
+      await challenge.update({
+        patientId: authPatient.id,
+        verifiedAt: new Date()
+      }, { transaction });
+
       return {
         matched: true,
-        verified: false,
-        reason: 'verification_token_not_found'
+        verified: true,
+        patientId: authPatient.id,
+        reason: 'patient_auth_verified'
       };
     }
 
