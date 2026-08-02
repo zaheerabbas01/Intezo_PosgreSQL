@@ -36,7 +36,7 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-SMS-Gateway-Key'],
   credentials: true
 }));
 
@@ -79,6 +79,7 @@ app.use([
   '/api/doctors/register'
 ], authLimiter);
 app.use('/api/phone-verification/start', phoneVerificationLimiter);
+app.use('/api/phone-verification/verify', phoneVerificationLimiter);
 app.use('/api/auth/patient/phone/status', patientPhoneStatusLimiter);
 
 // Initialize queue counters

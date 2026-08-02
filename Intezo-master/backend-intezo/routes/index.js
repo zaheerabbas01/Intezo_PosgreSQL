@@ -11,6 +11,7 @@ import reportRoutes from './reportRoutes.js';
 import sitemapRoutes from './sitemapRoutes.js';
 import phoneVerificationRoutes from './phoneVerificationRoutes.js';
 import whatsappWebhookRoutes from './whatsappWebhookRoutes.js';
+import smsGatewayRoutes from './smsGatewayRoutes.js';
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.use('/debug', debugRoutes);
 router.use('/reports', reportRoutes);
 router.use('/phone-verification', phoneVerificationRoutes);
 router.use('/webhooks/whatsapp', whatsappWebhookRoutes);
+router.use('/sms-gateway', smsGatewayRoutes);
 router.use('/', sitemapRoutes);
 
 export default router;

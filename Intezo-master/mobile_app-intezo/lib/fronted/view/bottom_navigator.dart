@@ -68,7 +68,7 @@ class _BottomNavState extends State<BottomNav> {
         ),
         title: const Text('Verify your phone number'),
         content: const Text(
-          'Verify through WhatsApp so Intezo can confirm that this phone number belongs to you. It is free and takes about a minute.',
+          'Verify by SMS so Intezo can confirm that this phone number belongs to you. It is quick and secure.',
         ),
         actions: [
           TextButton(

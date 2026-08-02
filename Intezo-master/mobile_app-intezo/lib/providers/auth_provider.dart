@@ -56,11 +56,16 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> completePhoneAuth(String requestId, String pollToken) async {
+  Future<bool> completePhoneAuth(
+    String requestId,
+    String pollToken,
+    String verificationCode,
+  ) async {
     try {
       final result = await AuthService.completePatientPhoneAuth(
         requestId,
         pollToken,
+        verificationCode,
       );
       if (result['success'] == true) {
         _isLoggedIn = true;

@@ -164,7 +164,7 @@ class _ProfileState extends State<Profile> {
                               const SizedBox(width: 6),
                               Text(
                                 phoneVerified
-                                    ? 'WhatsApp verified'
+                                    ? 'Phone verified'
                                     : 'Phone not verified',
                                 style: TextStyle(
                                   fontSize: 13,
@@ -198,7 +198,7 @@ class _ProfileState extends State<Profile> {
                         if (!phoneVerified) ...[
                           _buildMenuItem(
                             icon: Icons.chat_outlined,
-                            title: "Verify phone with WhatsApp",
+                            title: "Verify phone with SMS",
                             isDarkMode: isDarkMode,
                             onTap: () => _openPhoneVerification(patientData),
                           ),

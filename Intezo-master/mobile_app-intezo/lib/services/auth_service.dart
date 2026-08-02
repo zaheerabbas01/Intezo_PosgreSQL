@@ -47,11 +47,13 @@ class AuthService {
   static Future<Map<String, dynamic>> completePatientPhoneAuth(
     String requestId,
     String pollToken,
+    String verificationCode,
   ) async {
     final response = Map<String, dynamic>.from(
       await ApiService.post('auth/patient/phone/status', {
         'requestId': requestId,
         'pollToken': pollToken,
+        'verificationCode': verificationCode,
       }, isPublic: true),
     );
 

@@ -6,8 +6,9 @@ import emailService from '../../services/emailService.js';
 import { logActivity, publishAdminUpdate } from '../../utils/helpers.js';
 import {
   getPatientAuthChallengeStatus,
-  startPatientAuthChallenge
-} from '../../services/whatsappVerificationService.js';
+  startSmsChallenge,
+  verifySmsCode
+} from '../../services/smsGatewayService.js';
 
 export const createToken = (user, role) => jwt.sign({
   id: user.id,
@@ -35,7 +36,7 @@ async function handleUserOnlineTracking(user, role) {
 }
 
 export const initiatePatientRegistration = async (userData) => {
-  return startPatientAuthChallenge({
+  return startSmsChallenge({
     purpose: 'register',
     name: userData.name,
     phone: userData.phone
@@ -43,14 +44,16 @@ export const initiatePatientRegistration = async (userData) => {
 };
 
 export const handlePatientLogin = async (phone) => {
-  return startPatientAuthChallenge({
+  return startSmsChallenge({
     purpose: 'login',
     phone
   });
 };
 
-export const completePatientPhoneAuth = async (requestId, pollToken) => {
-  const result = await getPatientAuthChallengeStatus({
+export const completePatientPhoneAuth = async (requestId, pollToken, verificationCode) => {
+  const result = verificationCode
+    ? await verifySmsCode({ requestId, pollToken, code: verificationCode })
+    : await getPatientAuthChallengeStatus({
     requestId,
     pollToken
   });

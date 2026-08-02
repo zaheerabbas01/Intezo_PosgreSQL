@@ -12,7 +12,7 @@ const PatientAuthChallenge = sequelize.define('PatientAuthChallenge', {
     type: DataTypes.UUID
   },
   purpose: {
-    type: DataTypes.ENUM('login', 'register'),
+    type: DataTypes.ENUM('login', 'register', 'phone'),
     allowNull: false
   },
   name: {
@@ -27,6 +27,12 @@ const PatientAuthChallenge = sequelize.define('PatientAuthChallenge', {
     allowNull: false,
     unique: true
   },
+  smsCodeHash: {
+    type: DataTypes.STRING(64)
+  },
+  smsCodeCiphertext: {
+    type: DataTypes.TEXT
+  },
   pollTokenHash: {
     type: DataTypes.STRING(64),
     allowNull: false
@@ -40,6 +46,30 @@ const PatientAuthChallenge = sequelize.define('PatientAuthChallenge', {
   },
   consumedAt: {
     type: DataTypes.DATE
+  },
+  gatewayStatus: {
+    type: DataTypes.STRING(16),
+    allowNull: false,
+    defaultValue: 'pending'
+  },
+  gatewayClaimedAt: {
+    type: DataTypes.DATE
+  },
+  gatewaySentAt: {
+    type: DataTypes.DATE
+  },
+  gatewayAttempts: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
+  gatewayLastError: {
+    type: DataTypes.TEXT
+  },
+  verificationAttempts: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
   }
 }, {
   timestamps: true,

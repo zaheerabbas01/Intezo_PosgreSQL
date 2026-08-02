@@ -38,6 +38,18 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "mode"
+    productFlavors {
+        create("patient") {
+            dimension = "mode"
+        }
+        create("gateway") {
+            dimension = "mode"
+            applicationIdSuffix = ".gateway"
+            versionNameSuffix = "-gateway"
+        }
+    }
+
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?

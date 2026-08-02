@@ -28,7 +28,7 @@ export const registerPatient = async (req, res) => {
 
     res.set('Cache-Control', 'no-store');
     res.status(201).json({
-      message: 'Send the prepared WhatsApp message to verify your number.',
+      message: 'A verification code was sent by SMS. Enter it to verify your number.',
       ...challenge
     });
   } catch (err) {
@@ -47,7 +47,7 @@ export const patientLogin = async (req, res) => {
     const challenge = await authService.handlePatientLogin(phone);
     res.set('Cache-Control', 'no-store');
     return res.json({
-      message: 'Send the prepared WhatsApp message to sign in.',
+      message: 'A verification code was sent by SMS. Enter it to sign in.',
       ...challenge
     });
   } catch (err) {
@@ -58,16 +58,17 @@ export const patientLogin = async (req, res) => {
 
 export const patientPhoneAuthStatus = async (req, res) => {
   try {
-    const { requestId, pollToken } = req.body;
-    if (!requestId || !pollToken) {
+    const { requestId, pollToken, verificationCode } = req.body;
+    if (!requestId || !pollToken || !verificationCode) {
       return res.status(400).json({
-        error: 'Verification request ID and polling token are required'
+        error: 'Verification request ID, polling token, and SMS code are required'
       });
     }
 
     const result = await authService.completePatientPhoneAuth(
       requestId,
-      pollToken
+      pollToken,
+      verificationCode
     );
     res.set('Cache-Control', 'no-store');
 

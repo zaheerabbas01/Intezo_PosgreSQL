@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../providers/auth_provider.dart';
 import '../../../providers/theme_provider.dart';
@@ -21,17 +20,15 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _verificationCodeController = TextEditingController();
 
   AuthProvider? _authProvider;
-  Timer? _pollTimer;
   bool _isRegistering = false;
-  bool _isWaitingForWhatsApp = false;
-  bool _isOpeningWhatsApp = false;
-  bool _isCheckingStatus = false;
+  bool _isWaitingForSms = false;
+  bool _isVerifyingCode = false;
   bool _hasNavigated = false;
   String? _requestId;
   String? _pollToken;
-  String? _whatsappUrl;
   String? _verifiedPhone;
   DateTime? _expiresAt;
 
@@ -49,18 +46,16 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _isWaitingForWhatsApp) {
-      _checkVerificationStatus();
-    }
+    // SMS codes are entered directly in this screen; no background polling is needed.
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _authProvider?.removeListener(_handleAuthStateChange);
-    _pollTimer?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
+    _verificationCodeController.dispose();
     super.dispose();
   }
 
@@ -73,7 +68,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   void _openHome() {
     if (_hasNavigated || !mounted) return;
     _hasNavigated = true;
-    _pollTimer?.cancel();
     unawaited(SecureStorageService.clearPatientAuthChallenge());
     Navigator.of(
       context,
@@ -96,21 +90,17 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     setState(() {
       _requestId = result['requestId'].toString();
       _pollToken = result['pollToken'].toString();
-      _whatsappUrl = result['whatsappUrl'].toString();
       _verifiedPhone = result['phone']?.toString() ?? phone;
       _expiresAt = DateTime.tryParse(result['expiresAt']?.toString() ?? '');
-      _isWaitingForWhatsApp = true;
+      _isWaitingForSms = true;
     });
 
     await SecureStorageService.savePatientAuthChallenge({
       'requestId': _requestId,
       'pollToken': _pollToken,
-      'whatsappUrl': _whatsappUrl,
       'phone': _verifiedPhone,
       'expiresAt': _expiresAt?.toIso8601String(),
     });
-    _startPolling();
-    await _openWhatsApp();
   }
 
   Future<void> _restorePendingChallenge() async {
@@ -128,67 +118,36 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     setState(() {
       _requestId = challenge['requestId']?.toString();
       _pollToken = challenge['pollToken']?.toString();
-      _whatsappUrl = challenge['whatsappUrl']?.toString();
       _verifiedPhone = challenge['phone']?.toString();
       _expiresAt = expiresAt;
-      _isWaitingForWhatsApp =
-          _requestId != null && _pollToken != null && _whatsappUrl != null;
-    });
-    if (_isWaitingForWhatsApp) {
-      _startPolling();
-      _checkVerificationStatus();
-    }
-  }
-
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _checkVerificationStatus();
+      _isWaitingForSms = _requestId != null && _pollToken != null;
     });
   }
 
-  Future<void> _openWhatsApp() async {
-    final url = _whatsappUrl;
-    if (url == null || _isOpeningWhatsApp) return;
-
-    setState(() => _isOpeningWhatsApp = true);
-    try {
-      final opened = await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
-      if (!opened && mounted) {
-        _showMessage(
-          'WhatsApp could not be opened. Make sure it is installed.',
-          isError: true,
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        _showMessage(
-          'WhatsApp could not be opened. Make sure it is installed.',
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isOpeningWhatsApp = false);
-    }
-  }
-
-  Future<void> _checkVerificationStatus() async {
+  Future<void> _verifyCode() async {
     final requestId = _requestId;
     final pollToken = _pollToken;
     if (requestId == null ||
         pollToken == null ||
-        _isCheckingStatus ||
+        _isVerifyingCode ||
         _hasNavigated) {
       return;
     }
 
-    _isCheckingStatus = true;
+    final code = _verificationCodeController.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      _showMessage('Enter the 6-digit code from your SMS.', isError: true);
+      return;
+    }
+
+    setState(() => _isVerifyingCode = true);
     final provider = context.read<AuthProvider>();
-    final verified = await provider.completePhoneAuth(requestId, pollToken);
-    _isCheckingStatus = false;
+    final verified = await provider.completePhoneAuth(
+      requestId,
+      pollToken,
+      code,
+    );
+    if (mounted) setState(() => _isVerifyingCode = false);
 
     if (!mounted) return;
     if (verified) {
@@ -206,16 +165,15 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   }
 
   void _resetChallenge() {
-    _pollTimer?.cancel();
     if (!mounted) return;
     setState(() {
-      _isWaitingForWhatsApp = false;
+      _isWaitingForSms = false;
       _requestId = null;
       _pollToken = null;
-      _whatsappUrl = null;
       _verifiedPhone = null;
       _expiresAt = null;
-      _isCheckingStatus = false;
+      _isVerifyingCode = false;
+      _verificationCodeController.clear();
     });
     unawaited(SecureStorageService.clearPatientAuthChallenge());
   }
@@ -281,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                             : Colors.black.withValues(alpha: 0.06),
                       ),
                     ),
-                    child: _isWaitingForWhatsApp
+                    child: _isWaitingForSms
                         ? _buildWaitingState(
                             textColor,
                             secondaryText,
@@ -412,7 +370,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'No password or SMS code. You will verify ownership by sending a private, prepared WhatsApp message.',
+                  'No password. We will send a one-time SMS code to verify this number.',
                   style: TextStyle(
                     color: secondaryText,
                     fontSize: 12.5,
@@ -440,11 +398,9 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.chat_outlined),
+                  : const Icon(Icons.sms_outlined),
               label: Text(
-                authProvider.isLoading
-                    ? 'Preparing...'
-                    : 'Continue with WhatsApp',
+                authProvider.isLoading ? 'Preparing...' : 'Send SMS code',
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primary,
@@ -485,14 +441,14 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
           width: 72,
           height: 72,
           decoration: BoxDecoration(
-            color: const Color(0xFF25D366).withValues(alpha: 0.12),
+            color: primary.withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.chat, color: Color(0xFF128C7E), size: 36),
+          child: Icon(Icons.sms_outlined, color: primary, size: 36),
         ),
         const SizedBox(height: 22),
         Text(
-          'Verify in WhatsApp',
+          'Enter SMS code',
           style: TextStyle(
             color: textColor,
             fontSize: 24,
@@ -501,7 +457,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 10),
         Text(
-          'Send the prepared message from $_verifiedPhone, then return to Intezo. We will sign you in automatically.',
+          'Enter the 6-digit code sent to $_verifiedPhone.',
           textAlign: TextAlign.center,
           style: TextStyle(color: secondaryText, height: 1.5),
         ),
@@ -513,11 +469,30 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 16),
         ],
+        TextField(
+          controller: _verificationCodeController,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 24,
+            letterSpacing: 8,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: _inputDecoration(
+            'SMS code',
+            Icons.lock_outline,
+            Theme.of(context).brightness == Brightness.dark,
+            primary,
+          ).copyWith(counterText: ''),
+        ),
+        const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: _isOpeningWhatsApp ? null : _openWhatsApp,
-            icon: _isOpeningWhatsApp
+            onPressed: _isVerifyingCode ? null : _verifyCode,
+            icon: _isVerifyingCode
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -526,34 +501,11 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                       color: Colors.white,
                     ),
                   )
-                : const Icon(Icons.open_in_new),
-            label: const Text('Open WhatsApp'),
+                : const Icon(Icons.check_circle_outline),
+            label: const Text('Verify code'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF128C7E),
+              backgroundColor: primary,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              elevation: 0,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isCheckingStatus ? null : _checkVerificationStatus,
-            icon: _isCheckingStatus
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            label: const Text('Check verification status'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: primary,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -571,7 +523,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 10),
         Text(
-          'Never share the prepared verification message or token with anyone.',
+          'The code expires in 10 minutes.',
           textAlign: TextAlign.center,
           style: TextStyle(color: secondaryText, fontSize: 12),
         ),
