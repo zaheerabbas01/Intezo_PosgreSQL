@@ -45,7 +45,6 @@ android {
         }
         create("gateway") {
             dimension = "mode"
-            applicationIdSuffix = ".gateway"
             versionNameSuffix = "-gateway"
         }
     }
