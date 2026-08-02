@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -11,7 +14,11 @@ const _defaultApiBase = 'https://api.intezo.online/api';
 const _channel = MethodChannel('intezo.sms_gateway');
 const _storage = FlutterSecureStorage();
 
-void main() => runApp(const SmsGatewayApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(const SmsGatewayApp());
+}
 
 class SmsGatewayApp extends StatelessWidget {
   const SmsGatewayApp({super.key});
@@ -37,39 +44,66 @@ class SmsGatewayScreen extends StatefulWidget {
 class _SmsGatewayScreenState extends State<SmsGatewayScreen> {
   final _baseController = TextEditingController(text: _defaultApiBase);
   final _keyController = TextEditingController();
-  Timer? _timer;
+  String? _deviceId;
+  String? _fcmToken;
   bool _running = false;
-  bool _busy = false;
-  String _status = 'Enter the private gateway key, then start the gateway.';
+  String _status = 'Enter the private gateway key, then enable the gateway.';
 
   @override
   void initState() {
     super.initState();
-    _restoreKey();
+    _restoreConfig();
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+      _fcmToken = token;
+      if (_running) unawaited(_register(enabled: true));
+    });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _baseController.dispose();
     _keyController.dispose();
     super.dispose();
   }
 
-  Future<void> _restoreKey() async {
+  Future<void> _restoreConfig() async {
     final key = await _storage.read(key: 'sms_gateway_key');
-    if (mounted && key != null) _keyController.text = key;
+    final deviceId = await _storage.read(key: 'sms_gateway_device_id');
+    if (!mounted) return;
+    setState(() {
+      if (key != null) _keyController.text = key;
+      _deviceId = deviceId;
+    });
   }
+
+  Future<String> _getDeviceId() async {
+    final existing = _deviceId;
+    if (existing != null && existing.isNotEmpty) return existing;
+    final bytes = List<int>.generate(18, (_) => Random.secure().nextInt(256));
+    final generated = base64UrlEncode(bytes);
+    await _storage.write(key: 'sms_gateway_device_id', value: generated);
+    _deviceId = generated;
+    return generated;
+  }
+
+  Uri _uri(String path) => Uri.parse('${_baseController.text.trim()}$path');
 
   Future<void> _toggle() async {
     if (_running) {
-      _timer?.cancel();
-      setState(() {
-        _running = false;
-        _status = 'Gateway stopped.';
-      });
+      try {
+        await _register(enabled: false);
+        if (mounted) {
+          setState(() {
+            _running = false;
+            _status = 'Gateway disabled. It will no longer receive SMS jobs.';
+          });
+        }
+      } catch (error) {
+        if (mounted) setState(() => _status = 'Unable to disable gateway: $error');
+      }
       return;
     }
+
     final key = _keyController.text.trim();
     if (key.length < 32) {
       setState(
@@ -82,67 +116,55 @@ class _SmsGatewayScreenState extends State<SmsGatewayScreen> {
       setState(() => _status = 'SMS permission is required on this phone.');
       return;
     }
-    await _storage.write(key: 'sms_gateway_key', value: key);
-    setState(() {
-      _running = true;
-      _status =
-          'Gateway is running. Keep this app open and keep the SIM connected.';
-    });
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _poll());
-    await _poll();
+
+    try {
+      final deviceId = await _getDeviceId();
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Firebase could not create a device token.');
+      }
+      _fcmToken = token;
+      await _storage.write(key: 'sms_gateway_key', value: key);
+      await _channel.invokeMethod('configureGateway', {
+        'baseUrl': _baseController.text.trim(),
+        'key': key,
+        'deviceId': deviceId,
+      });
+      await _register(enabled: true);
+      if (mounted) {
+        setState(() {
+          _running = true;
+          _status =
+              'FCM gateway enabled. This app can now run in the background.';
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _status = 'Gateway setup error: $error');
+    }
   }
 
-  Uri _uri(String path) => Uri.parse('${_baseController.text.trim()}$path');
-
-  Future<void> _poll() async {
-    if (!_running || _busy) return;
-    _busy = true;
-    final key = _keyController.text.trim();
-    try {
-      final response = await http
-          .get(
-            _uri('/sms-gateway/jobs/next'),
-            headers: {'X-SMS-Gateway-Key': key, 'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200)
-        throw Exception('Gateway request failed (${response.statusCode}).');
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final job = body['job'];
-      if (job == null) {
-        if (mounted)
-          setState(() => _status = 'Waiting for a verification request...');
-        return;
-      }
-      final jobMap = Map<String, dynamic>.from(job as Map);
-      final phone = jobMap['phone'].toString();
-      final code = jobMap['code'].toString();
-      if (mounted) setState(() => _status = 'Sending code to $phone...');
-      final sent =
-          await _channel.invokeMethod<bool>('sendSms', {
-            'phone': phone,
-            'message':
-                'Intezo verification code: $code. Do not share this code.',
-          }) ??
-          false;
-      await http.post(
-        _uri('/sms-gateway/jobs/${jobMap['jobId']}/result'),
-        headers: {'X-SMS-Gateway-Key': key, 'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'success': sent,
-          if (!sent) 'error': 'Android SMS service returned false.',
-        }),
-      );
-      if (mounted)
-        setState(
-          () => _status = sent
-              ? 'SMS sent successfully.'
-              : 'Android could not send the SMS; it will be retried.',
-        );
-    } catch (error) {
-      if (mounted) setState(() => _status = 'Gateway error: $error');
-    } finally {
-      _busy = false;
+  Future<void> _register({required bool enabled}) async {
+    final token = _fcmToken ?? await FirebaseMessaging.instance.getToken();
+    final deviceId = await _getDeviceId();
+    if (token == null || token.isEmpty)
+      throw Exception('FCM token unavailable.');
+    _fcmToken = token;
+    final response = await http
+        .post(
+          _uri('/sms-gateway/register'),
+          headers: {
+            'X-SMS-Gateway-Key': _keyController.text.trim(),
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'deviceId': deviceId,
+            'fcmToken': token,
+            'enabled': enabled,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw Exception('Gateway registration failed (${response.statusCode}).');
     }
   }
 
@@ -181,7 +203,7 @@ class _SmsGatewayScreenState extends State<SmsGatewayScreen> {
         FilledButton.icon(
           onPressed: _toggle,
           icon: Icon(_running ? Icons.stop : Icons.play_arrow),
-          label: Text(_running ? 'Stop gateway' : 'Start gateway'),
+          label: Text(_running ? 'Disable gateway' : 'Enable gateway'),
         ),
         const SizedBox(height: 16),
         Card(
@@ -192,7 +214,7 @@ class _SmsGatewayScreenState extends State<SmsGatewayScreen> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Keep this screen open, disable battery optimization for this app, and keep the phone charged. The gateway polls the backend every five seconds.',
+          'FCM wakes the gateway when a code is requested. Keep the phone charged, allow notifications, disable battery optimization for this app, and keep the SIM connected.',
         ),
       ],
     ),

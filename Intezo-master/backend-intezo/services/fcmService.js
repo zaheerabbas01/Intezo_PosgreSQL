@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import Patient from '../models/Patient.js';
+import SmsGatewayDevice from '../models/SmsGatewayDevice.js';
 import { Op } from 'sequelize';
 
 class FCMService {
@@ -75,6 +76,41 @@ class FCMService {
       this.markNotificationSent(notificationKey);
     } catch (error) {
       console.error('Error sending queue notification:', error);
+    }
+  }
+
+  async sendSmsGatewayJob(jobId) {
+    try {
+      this.initialize();
+      const devices = await SmsGatewayDevice.findAll({
+        where: { enabled: true },
+        attributes: ['id', 'fcmToken']
+      });
+      if (devices.length === 0) return false;
+
+      let delivered = 0;
+      for (const device of devices) {
+        try {
+          await admin.messaging().send({
+            token: device.fcmToken,
+            data: {
+              type: 'sms_gateway_job',
+              jobId: String(jobId)
+            },
+            android: { priority: 'high' }
+          });
+          delivered++;
+        } catch (error) {
+          console.error(`Failed to wake SMS gateway device ${device.id}: ${error.message}`);
+          if (error.code === 'messaging/registration-token-not-registered') {
+            await device.update({ enabled: false }).catch(() => {});
+          }
+        }
+      }
+      return delivered > 0;
+    } catch (error) {
+      console.error('Error sending SMS gateway push:', error.message);
+      return false;
     }
   }
 

@@ -4,6 +4,8 @@ import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database.js';
 import Patient from '../models/Patient.js';
 import PatientAuthChallenge from '../models/PatientAuthChallenge.js';
+import SmsGatewayDevice from '../models/SmsGatewayDevice.js';
+import FCMService from './fcmService.js';
 import { normalizePakistaniPhone, PhoneVerificationError } from './whatsappVerificationService.js';
 
 const TOKEN_TTL_MS = 10 * 60 * 1000;
@@ -138,13 +140,49 @@ export const startSmsChallenge = async ({ purpose, patientId = null, name, phone
     verificationAttempts: 0
   });
 
+  const pushDelivered = await FCMService.sendSmsGatewayJob(challenge.id);
+  if (!pushDelivered) {
+    await challenge.update({
+      gatewayStatus: 'failed',
+      gatewayLastError: 'No active SMS gateway device received the push notification.'
+    });
+    throw new PhoneVerificationError(
+      'The SMS gateway phone is offline. Start the gateway phone and try again.',
+      503
+    );
+  }
+
   return {
     requestId: challenge.id,
     pollToken,
     phone: normalized.e164,
     expiresAt: expiresAt.toISOString(),
-    pollAfterSeconds: 5,
     requiresVerification: true
+  };
+};
+
+export const registerSmsGatewayDevice = async ({ deviceId, fcmToken, enabled = true }) => {
+  gatewayKey();
+  const normalizedDeviceId = String(deviceId || '').trim();
+  const normalizedToken = String(fcmToken || '').trim();
+  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(normalizedDeviceId) || normalizedToken.length < 20) {
+    throw new PhoneVerificationError('A valid gateway device ID and FCM token are required.');
+  }
+
+  const existing = await SmsGatewayDevice.findOne({
+    where: { [Op.or]: [{ deviceId: normalizedDeviceId }, { fcmToken: normalizedToken }] }
+  });
+  const values = {
+    deviceId: normalizedDeviceId,
+    fcmToken: normalizedToken,
+    enabled: Boolean(enabled),
+    lastSeenAt: new Date()
+  };
+  const device = existing ? await existing.update(values) : await SmsGatewayDevice.create(values);
+  return {
+    deviceId: device.deviceId,
+    enabled: device.enabled,
+    lastSeenAt: device.lastSeenAt
   };
 };
 
@@ -246,7 +284,7 @@ export const verifySmsCode = async ({ requestId, pollToken, code }) => {
   });
 };
 
-export const claimNextSmsJob = async () => {
+const claimJob = async (where, order = [['createdAt', 'ASC']]) => {
   gatewayKey();
   return sequelize.transaction(async (transaction) => {
     const now = new Date();
@@ -257,9 +295,10 @@ export const claimNextSmsJob = async () => {
         [Op.or]: [
           { gatewayStatus: 'pending' },
           { gatewayStatus: 'claimed', gatewayClaimedAt: { [Op.lt]: new Date(Date.now() - CLAIM_LEASE_MS) } }
-        ]
+        ],
+        ...where
       },
-      order: [['createdAt', 'ASC']],
+      order,
       transaction,
       lock: transaction.LOCK.UPDATE,
       skipLocked: true
@@ -278,6 +317,12 @@ export const claimNextSmsJob = async () => {
       expiresAt: challenge.expiresAt.toISOString()
     };
   });
+};
+
+export const claimSmsJob = async (jobId) => {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) throw new PhoneVerificationError('SMS job ID is required.');
+  return claimJob({ id: normalizedJobId }, [['createdAt', 'ASC']]);
 };
 
 export const completeSmsJob = async ({ jobId, success, error }) => {
