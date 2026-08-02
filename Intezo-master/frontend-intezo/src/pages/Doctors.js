@@ -1,6 +1,6 @@
 // src/pages/Doctors.js
 import React, { useState, useEffect, useMemo } from 'react';
-import api, { getDoctors, updateDoctor, deleteDoctor, getDoctorQueueStatus, getAvailableDoctors, addDoctorToClinic } from '../api/clinicApi';
+import api, { getDoctors, updateDoctor, deleteDoctor, getDoctorQueueStatus, addDoctorToClinic } from '../api/clinicApi';
 import '../styles/Doctors.scss';
 import '../styles/DoctorModal.scss';
 import { useNavigate } from 'react-router-dom';
@@ -8,13 +8,12 @@ import { useSocket } from '../context/PusherContext';
 
 const Doctors = () => {
     const [doctors, setDoctors] = useState([]);
-    const [availableDoctors, setAvailableDoctors] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditForm, setShowEditForm] = useState(false);
     const [editingDoctor, setEditingDoctor] = useState(null);
-    const [selectedDoctor, setSelectedDoctor] = useState(null);
+    const [doctorCode, setDoctorCode] = useState('');
     const [formData, setFormData] = useState({
         consultationFee: '',
         availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
@@ -31,7 +30,6 @@ const Doctors = () => {
     const [sortOrder, setSortOrder] = useState('asc');
     const [showSettingsInModal, setShowSettingsInModal] = useState(false);
     const [isAddingDoctor, setIsAddingDoctor] = useState(false);
-    const [loadingAvailableDoctors, setLoadingAvailableDoctors] = useState(false);
     const navigate = useNavigate();
     const { socket, joinClinic, subscribe } = useSocket();
 
@@ -61,7 +59,6 @@ const Doctors = () => {
 
     useEffect(() => {
         fetchDoctors();
-        fetchAvailableDoctors();
     }, []);
 
     useEffect(() => {
@@ -86,21 +83,6 @@ const Doctors = () => {
 
         return unsubscribe;
     }, [socket, joinClinic, subscribe]);
-
-    const fetchAvailableDoctors = async () => {
-        try {
-            setLoadingAvailableDoctors(true);
-            console.log('Fetching available doctors...');
-            const response = await getAvailableDoctors();
-            console.log('Available doctors response:', response.data);
-            setAvailableDoctors(response.data);
-        } catch (err) {
-            console.error('Error fetching available doctors:', err);
-            setError('Failed to fetch available doctors');
-        } finally {
-            setLoadingAvailableDoctors(false);
-        }
-    };
 
     const fetchDoctors = async () => {
         try {
@@ -183,9 +165,8 @@ const Doctors = () => {
     const handleAddDoctor = async (e) => {
         e.preventDefault();
         
-        // Check if doctor is selected
-        if (!selectedDoctor || !selectedDoctor.id) {
-            setError('Please select a doctor first');
+        if (!doctorCode.trim()) {
+            setError('Enter the doctor code');
             return;
         }
         
@@ -215,7 +196,7 @@ const Doctors = () => {
             setIsAddingDoctor(true);
             
             const doctorData = {
-                doctorId: selectedDoctor.id,
+                doctorCode: doctorCode.trim(),
                 consultationFee: parseFloat(formData.consultationFee),
                 availableDays: formData.availableDays,
                 availableHours: formData.availableHours
@@ -227,10 +208,8 @@ const Doctors = () => {
             if (response.data) {
                 console.log('Doctor added successfully:', response.data);
                 setShowAddModal(false);
-                setSelectedDoctor(null);
                 resetForm();
                 await fetchDoctors();
-                await fetchAvailableDoctors();
                 // Show success message
                 alert('Doctor added to clinic successfully!');
             }
@@ -259,6 +238,7 @@ const Doctors = () => {
     };
 
     const resetForm = () => {
+        setDoctorCode('');
         setFormData({
             consultationFee: '',
             availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
@@ -279,16 +259,6 @@ const Doctors = () => {
         setShowEditForm(true);
     };
 
-    const selectDoctor = (doctor) => {
-        console.log('Doctor selected:', doctor);
-        if (!doctor || !doctor.id) {
-            setError('Invalid doctor selection');
-            return;
-        }
-        setSelectedDoctor(doctor);
-        setShowAddModal(true);
-    };
-
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this doctor?')) {
             try {
@@ -303,7 +273,6 @@ const Doctors = () => {
 
     const cancelAddModal = () => {
         setShowAddModal(false);
-        setSelectedDoctor(null);
         setIsAddingDoctor(false);
         setError('');
         resetForm();
@@ -415,11 +384,7 @@ const Doctors = () => {
                 <div className="header-actions">
                     <button
                         className="btn btn-primary"
-                        onClick={() => {
-                            console.log('Add Doctor button clicked');
-                            console.log('Available doctors:', availableDoctors);
-                            setShowAddModal(true);
-                        }}
+                        onClick={() => setShowAddModal(true)}
                         disabled={loading}
                     >
                         + Add Doctor
@@ -489,168 +454,81 @@ const Doctors = () => {
                 <div className="doctor-form-overlay">
                     <div className="doctor-form">
                         <h2>Add Doctor to Clinic</h2>
-                        {!selectedDoctor ? (
-                            <div className="available-doctors">
-                                <h3>Select a Doctor to Add</h3>
-                                {loadingAvailableDoctors ? (
-                                    <div className="loading-doctors">
-                                        <div className="loading-spinner">⏳</div>
-                                        <p>Loading available doctors...</p>
-                                    </div>
-                                ) : availableDoctors.length === 0 ? (
-                                    <div className="no-doctors-message">
-                                        <div className="empty-icon">👨‍⚕️</div>
-                                        <p><strong>No available doctors found</strong></p>
-                                        <p>All registered doctors are already in your clinic, or no doctors have registered in the system yet.</p>
-                                        <div className="action-buttons">
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-info"
-                                                onClick={() => {
-                                                    console.log('Refreshing available doctors...');
-                                                    fetchAvailableDoctors();
-                                                }}
-                                                disabled={loadingAvailableDoctors}
-                                            >
-                                                {loadingAvailableDoctors ? '⏳ Loading...' : '🔄 Refresh List'}
-                                            </button>
-                                            <button type="button" className="btn btn-secondary" onClick={cancelAddModal}>
-                                                Close
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <p className="instruction-text">Click on a doctor below to add them to your clinic:</p>
-                                        <div className="doctors-grid">
-                                            {availableDoctors.map(doctor => (
-                                                <div key={doctor.id} className="doctor-option" onClick={() => selectDoctor(doctor)}>
-                                                    <div className="doctor-header">
-                                                        <h4>{doctor.name}</h4>
-                                                        <span className="doctor-badge">Available</span>
-                                                    </div>
-                                                    <div className="doctor-details">
-                                                        <p><strong>Specialties:</strong> {doctor.specialties?.join(', ') || 'General Practice'}</p>
-                                                        <p><strong>License:</strong> {doctor.licenseNumber}</p>
-                                                        <p><strong>Email:</strong> {doctor.email}</p>
-                                                        {doctor.phone && <p><strong>Phone:</strong> {doctor.phone}</p>}
-                                                    </div>
-                                                    <div className="select-button">
-                                                        <span>Click to Select</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="modal-footer">
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-info"
-                                                onClick={() => {
-                                                    console.log('Refreshing available doctors...');
-                                                    fetchAvailableDoctors();
-                                                }}
-                                                disabled={loadingAvailableDoctors}
-                                            >
-                                                {loadingAvailableDoctors ? '⏳ Loading...' : '🔄 Refresh List'}
-                                            </button>
-                                            <button type="button" className="btn btn-secondary" onClick={cancelAddModal}>
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </>
+                        <form onSubmit={handleAddDoctor}>
+                            <p className="instruction-text">Ask the doctor for the code shown in their Intezo portal.</p>
+
+                            {error && <div className="error-message" style={{marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '6px', fontSize: '0.875rem'}}>{error}</div>}
+
+                            <div className="form-group">
+                                <label>Doctor Code *</label>
+                                <input
+                                    type="text"
+                                    value={doctorCode}
+                                    onChange={(e) => setDoctorCode(e.target.value)}
+                                    placeholder="DR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                    autoComplete="off"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Consultation Fee (Required) *</label>
+                                <input
+                                    type="number"
+                                    name="consultationFee"
+                                    value={formData.consultationFee}
+                                    onChange={handleInputChange}
+                                    min="1"
+                                    step="0.01"
+                                    placeholder="Enter consultation fee"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Available Days (Select at least one) *</label>
+                                <div className="days-checkboxes">
+                                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                        <label key={day} className="checkbox-label">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.availableDays.includes(day)}
+                                                onChange={() => handleDayToggle(day)}
+                                            />
+                                            {day}
+                                        </label>
+                                    ))}
+                                </div>
+                                {formData.availableDays.length === 0 && (
+                                    <small style={{color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block'}}>
+                                        Please select at least one day
+                                    </small>
                                 )}
                             </div>
-                        ) : (
-                            <form onSubmit={handleAddDoctor}>
-                                <div className="selected-doctor">
-                                    <h3>Selected Doctor</h3>
-                                    <p><strong>{selectedDoctor.name}</strong></p>
-                                    <p>Specialties: {selectedDoctor.specialties?.join(', ')}</p>
-                                    <p>Qualifications: {selectedDoctor.qualifications?.map(q => `${q.degree} (${q.year})`).join(', ')}</p>
-                                </div>
 
-                                {error && <div className="error-message" style={{marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '6px', fontSize: '0.875rem'}}>{error}</div>}
-
-                                <div className="form-group">
-                                    <label>Consultation Fee (Required) *</label>
-                                    <input
-                                        type="number"
-                                        name="consultationFee"
-                                        value={formData.consultationFee}
-                                        onChange={handleInputChange}
-                                        min="1"
-                                        step="0.01"
-                                        placeholder="Enter consultation fee"
-                                        required
-                                    />
+                            <div className="form-group time-range">
+                                <label>Available Hours *</label>
+                                <div className="time-inputs">
+                                    <input type="time" name="startTime" value={formData.availableHours.start} onChange={handleInputChange} required />
+                                    <span>to</span>
+                                    <input type="time" name="endTime" value={formData.availableHours.end} onChange={handleInputChange} required />
                                 </div>
+                                {formData.availableHours.start && formData.availableHours.end && formData.availableHours.start >= formData.availableHours.end && (
+                                    <small style={{color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block'}}>
+                                        End time must be after start time
+                                    </small>
+                                )}
+                            </div>
 
-                                <div className="form-group">
-                                    <label>Available Days (Select at least one) *</label>
-                                    <div className="days-checkboxes">
-                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                            <label key={day} className="checkbox-label">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.availableDays.includes(day)}
-                                                    onChange={() => handleDayToggle(day)}
-                                                />
-                                                {day}
-                                            </label>
-                                        ))}
-                                    </div>
-                                    {formData.availableDays.length === 0 && (
-                                        <small style={{color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block'}}>
-                                            Please select at least one day
-                                        </small>
-                                    )}
-                                </div>
-
-                                <div className="form-group time-range">
-                                    <label>Available Hours *</label>
-                                    <div className="time-inputs">
-                                        <input
-                                            type="time"
-                                            name="startTime"
-                                            value={formData.availableHours.start}
-                                            onChange={handleInputChange}
-                                            required
-                                        />
-                                        <span>to</span>
-                                        <input
-                                            type="time"
-                                            name="endTime"
-                                            value={formData.availableHours.end}
-                                            onChange={handleInputChange}
-                                            required
-                                        />
-                                    </div>
-                                    {formData.availableHours.start && formData.availableHours.end && formData.availableHours.start >= formData.availableHours.end && (
-                                        <small style={{color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block'}}>
-                                            End time must be after start time
-                                        </small>
-                                    )}
-                                </div>
-
-                                <div className="form-actions">
-                                    <button 
-                                        type="submit" 
-                                        className="btn btn-primary"
-                                        disabled={isAddingDoctor || formData.availableDays.length === 0 || !formData.consultationFee}
-                                    >
-                                        {isAddingDoctor ? 'Adding Doctor...' : 'Add Doctor'}
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        className="btn btn-secondary" 
-                                        onClick={cancelAddModal}
-                                        disabled={isAddingDoctor}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        )}
+                            <div className="form-actions">
+                                <button type="submit" className="btn btn-primary" disabled={isAddingDoctor || formData.availableDays.length === 0 || !formData.consultationFee}>
+                                    {isAddingDoctor ? 'Adding Doctor...' : 'Add Doctor'}
+                                </button>
+                                <button type="button" className="btn btn-secondary" onClick={cancelAddModal} disabled={isAddingDoctor}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
@@ -734,11 +612,9 @@ const Doctors = () => {
                         <p>
                             {searchTerm 
                                 ? 'Try adjusting your search criteria' 
-                                : availableDoctors.length > 0 
-                                    ? 'Add registered doctors to get started.' 
-                                    : 'No registered doctors available to add.'}
+                                : 'Use a doctor code to add your first doctor.'}
                         </p>
-                        {!searchTerm && availableDoctors.length > 0 && (
+                        {!searchTerm && (
                             <button 
                                 className="btn btn-primary"
                                 onClick={() => setShowAddModal(true)}

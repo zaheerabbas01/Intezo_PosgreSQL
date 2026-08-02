@@ -160,19 +160,14 @@ export const updateDoctorProfile = async (req, res) => {
 };
 
 export const getAvailableDoctors = async (req, res) => {
-  try {
-    const available = await doctorService.fetchDoctorsAvailableForClinic(req.clinic.id);
-    res.json(available);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(410).json({ error: 'Use a doctor code to add a doctor to your clinic' });
 };
 
 export const addDoctorToClinic = async (req, res) => {
   try {
-    const { doctorId, ...clinicData } = req.body;
-    const doctor = await doctorService.linkDoctorToClinic(doctorId, req.clinic.id, clinicData);
-    res.json({ message: 'Doctor linked successfully', doctor: { id: doctor.id, name: doctor.name } });
+    const { doctorCode, ...clinicData } = req.body;
+    const doctor = await doctorService.linkDoctorToClinic(doctorCode, req.clinic.id, clinicData);
+    res.json({ message: 'Doctor linked successfully', doctor: { id: doctor.id, name: doctor.name, doctorCode: doctorService.getDoctorCode(doctor.id) } });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

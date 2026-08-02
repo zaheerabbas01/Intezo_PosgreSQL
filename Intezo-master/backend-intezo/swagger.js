@@ -639,10 +639,10 @@ export const swaggerSpec = {
     '/doctors/available': {
       get: {
         tags: ['Doctors'],
-        summary: 'List available doctors',
+        summary: 'Deprecated: doctors are added using a doctor code',
         security: [{ BearerAuth: [] }],
         responses: {
-          200: { description: 'Available doctors returned' },
+          410: { description: 'Use POST /doctors/add-to-clinic with doctorCode' },
           401: { $ref: '#/components/responses/UnauthorizedError' },
           500: { $ref: '#/components/responses/InternalServerError' }
         }
@@ -657,7 +657,16 @@ export const swaggerSpec = {
           required: true,
           content: {
             'application/json': {
-              schema: { type: 'object', additionalProperties: true }
+              schema: {
+                type: 'object',
+                required: ['doctorCode'],
+                properties: {
+                  doctorCode: { type: 'string', example: 'DR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+                  consultationFee: { type: 'number' },
+                  availableDays: { type: 'array', items: { type: 'string' } },
+                  availableHours: { type: 'object' }
+                }
+              }
             }
           }
         },

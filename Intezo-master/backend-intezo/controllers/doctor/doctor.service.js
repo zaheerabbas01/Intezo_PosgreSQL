@@ -6,6 +6,16 @@ import { Op } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
 
+const DOCTOR_CODE_PREFIX = 'DR-';
+
+export const getDoctorCode = (doctorId) => `${DOCTOR_CODE_PREFIX}${doctorId}`;
+
+const getDoctorIdFromCode = (doctorCode) => {
+  const match = String(doctorCode || '').trim().match(/^DR-([0-9a-f-]{36})$/i);
+  if (!match) throw new Error('Enter a valid doctor code');
+  return match[1].toLowerCase();
+};
+
 export const triggerQueueUpdate = async (clinicId, doctorId, manualData = null) => {
   try {
     const redisKey = `doctor:${doctorId}:clinic:${clinicId}:current`;
@@ -91,6 +101,7 @@ export const fetchDoctorProfile = async (doctorId) => {
     });
     const clinicMap = Object.fromEntries(clinicRecords.map(c => [c.id, c]));
     const enriched = doctor.toJSON();
+    enriched.doctorCode = getDoctorCode(doctor.id);
     enriched.clinics = doctor.clinics.map(assoc => ({
       ...assoc,
       clinic: clinicMap[assoc.clinic] ? {
@@ -106,7 +117,9 @@ export const fetchDoctorProfile = async (doctorId) => {
     return enriched;
   }
 
-  return doctor;
+  const profile = doctor.toJSON();
+  profile.doctorCode = getDoctorCode(doctor.id);
+  return profile;
 };
 
 export const calculateDoctorStats = async (doctorId) => {
@@ -121,12 +134,8 @@ export const calculateDoctorStats = async (doctorId) => {
   return { totalPatientsServed: totalServed, todayPatients: todayServed, activeQueues: activeWaiting, clinicsCount: doctor?.clinics?.length || 0, recentActivity: [{ description: `Served ${todayServed} patients today`, time: 'Today' }, { description: `Total served: ${totalServed} patients`, time: 'All time' }, { description: `Active in ${doctor?.clinics?.length || 0} clinics`, time: 'Current' }] };
 };
 
-export const fetchDoctorsAvailableForClinic = async (clinicId) => {
-  const allDoctors = await Doctor.findAll({ attributes: ['id', 'name', 'email', 'specialties', 'qualifications', 'licenseNumber', 'phone', 'clinics'] });
-  return allDoctors.filter(doc => !doc.clinics?.some(c => c.clinic?.toString() === clinicId.toString())).map(doc => ({ id: doc.id, name: doc.name, email: doc.email, specialties: doc.specialties, qualifications: doc.qualifications, licenseNumber: doc.licenseNumber, phone: doc.phone }));
-};
-
-export const linkDoctorToClinic = async (doctorId, clinicId, data) => {
+export const linkDoctorToClinic = async (doctorCode, clinicId, data) => {
+  const doctorId = getDoctorIdFromCode(doctorCode);
   const doctor = await Doctor.findByPk(doctorId);
   if (!doctor) throw new Error('Doctor not found');
   if (doctor.clinics.some(c => c.clinic.toString() === clinicId.toString())) throw new Error('Doctor already associated with this clinic');

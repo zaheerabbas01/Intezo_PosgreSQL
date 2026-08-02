@@ -78,6 +78,7 @@ const DoctorDashboard = () => {
             ))}
           </div>
           <p className="license">License: {doctorProfile?.licenseNumber || currentDoctor?.doctor?.licenseNumber}</p>
+          <p className="license">Doctor code: {doctorProfile?.doctorCode || `DR-${doctorProfile?.id || currentDoctor?.doctor?.id || ''}`}</p>
         </div>
         <div className="header-actions">
           <button onClick={() => fetchDashboardData(true)} className="refresh-btn">
