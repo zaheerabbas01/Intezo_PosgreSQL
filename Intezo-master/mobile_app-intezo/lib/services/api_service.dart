@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import 'secure_storage_service.dart';
+import 'session_events.dart';
 
 class ApiService {
   static const Duration _requestTimeout = Duration(seconds: 20);
@@ -51,6 +52,19 @@ class ApiService {
     if (kDebugMode) debugPrint('$method completed with HTTP $statusCode');
   }
 
+  static Future<void> _handleUnauthorized(
+    http.Response response, {
+    required bool isPublic,
+    required String endpoint,
+  }) async {
+    if (isPublic || response.statusCode != 401 || endpoint == 'auth/logout') {
+      return;
+    }
+
+    await SecureStorageService.clearSession();
+    SessionEvents.notifyExpired();
+  }
+
   static Future<dynamic> get(
     String endpoint, {
     bool isPublic = false,
@@ -69,6 +83,7 @@ class ApiService {
         .get(url, headers: isPublic ? _publicHeaders : await _getHeaders())
         .timeout(_requestTimeout);
     _debugStatus('GET', response.statusCode);
+    await _handleUnauthorized(response, isPublic: isPublic, endpoint: endpoint);
 
     if (response.statusCode == 200) return _decodeBody(response);
     throw Exception(_errorMessage(response, 'Unable to load data'));
@@ -87,6 +102,7 @@ class ApiService {
         )
         .timeout(_requestTimeout);
     _debugStatus('POST', response.statusCode);
+    await _handleUnauthorized(response, isPublic: isPublic, endpoint: endpoint);
 
     final responseBody = _decodeBody(response);
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -109,6 +125,7 @@ class ApiService {
         )
         .timeout(_requestTimeout);
     _debugStatus('PUT', response.statusCode);
+    await _handleUnauthorized(response, isPublic: false, endpoint: endpoint);
 
     if (response.statusCode == 200) return _decodeBody(response);
     throw Exception(_errorMessage(response, 'Unable to update data'));
@@ -119,6 +136,7 @@ class ApiService {
         .delete(Uri.parse('$baseUrl/$endpoint'), headers: await _getHeaders())
         .timeout(_requestTimeout);
     _debugStatus('DELETE', response.statusCode);
+    await _handleUnauthorized(response, isPublic: false, endpoint: endpoint);
 
     if (response.statusCode == 200 || response.statusCode == 204) {
       return _decodeBody(response);
@@ -199,6 +217,11 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 60));
     _debugStatus('REPORT_DOWNLOAD', response.statusCode);
+    await _handleUnauthorized(
+      response,
+      isPublic: false,
+      endpoint: 'reports/$reportId/download',
+    );
 
     if (response.statusCode == 200) return response.bodyBytes;
     throw Exception(_errorMessage(response, 'Unable to download report'));
@@ -214,6 +237,11 @@ class ApiService {
           )
           .timeout(_requestTimeout);
       _debugStatus('PATCH', response.statusCode);
+      await _handleUnauthorized(
+        response,
+        isPublic: false,
+        endpoint: 'reports/$reportId/read',
+      );
       if (response.statusCode != 200) return false;
       final body = _decodeBody(response);
       return body is Map<String, dynamic> && body['success'] == true;

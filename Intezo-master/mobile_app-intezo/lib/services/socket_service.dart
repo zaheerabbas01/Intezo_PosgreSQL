@@ -17,11 +17,6 @@ class SocketService {
   bool _isInitialized = false;
   String? _currentClinicId;
   String? _currentDoctorId;
-  Function(String, String?)? _onFallbackToPolling;
-
-  void setFallbackCallback(Function(String, String?) callback) {
-    _onFallbackToPolling = callback;
-  }
 
   Future<void> connect({String? clinicId, String? doctorId}) async {
     print(
@@ -75,9 +70,6 @@ class SocketService {
       _socket!.onConnectError((error) {
         print('Socket.IO connection error: $error');
         isConnected = false;
-        if (clinicId != null && _onFallbackToPolling != null) {
-          _onFallbackToPolling!(clinicId, doctorId);
-        }
       });
 
       _socket!.onError((error) {
@@ -188,10 +180,7 @@ class SocketService {
 
   Future<void> joinClinicRoom(String clinicId, {String? doctorId}) async {
     if (_socket == null || !isConnected) {
-      print('Socket not connected, using polling');
-      if (_onFallbackToPolling != null) {
-        _onFallbackToPolling!(clinicId, doctorId);
-      }
+      print('Socket not connected; waiting for Socket.IO reconnect');
       return;
     }
 
@@ -231,9 +220,6 @@ class SocketService {
       );
     } catch (e) {
       print('Error joining room: $e');
-      if (_onFallbackToPolling != null) {
-        _onFallbackToPolling!(clinicId, doctorId);
-      }
     }
   }
 

@@ -4,6 +4,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/clinic_provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../services/secure_storage_service.dart';
+import '../../services/app_navigation_service.dart';
 import 'bottom_navigator.dart';
 import 'auth/login_screen.dart';
 
@@ -69,6 +70,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 : const LoginScreen(),
           ),
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          AppNavigationService.markAppReady();
+        });
       } else {
         print('🚀 Splash Screen: Widget not mounted, skipping navigation');
       }
@@ -76,11 +80,19 @@ class _SplashScreenState extends State<SplashScreen> {
       print('🔴 Splash Screen Error: $e');
       print('🔴 Stack trace: $stackTrace');
 
-      // Fallback navigation on error
+      // A temporary API/cache failure must not log out a valid session.
       if (mounted) {
+        final storedToken = await SecureStorageService.readToken();
+        final hasSession = storedToken != null && storedToken.isNotEmpty;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(
+            builder: (context) =>
+                hasSession ? const BottomNav() : const LoginScreen(),
+          ),
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          AppNavigationService.markAppReady();
+        });
       }
     }
   }

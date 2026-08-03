@@ -18,6 +18,7 @@ class Status extends StatefulWidget {
 
 class _StatusState extends State<Status> {
   bool _isLoading = true;
+  bool _isStale = false;
   String? _error;
   Map<String, dynamic>? _queueData;
   bool _showUpdateIndicator = false;
@@ -105,7 +106,12 @@ class _StatusState extends State<Status> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildMainContent(isDarkMode),
+          : Column(
+              children: [
+                if (_isStale) _buildStaleBanner(isDarkMode),
+                Expanded(child: _buildMainContent(isDarkMode)),
+              ],
+            ),
     );
   }
 
@@ -307,9 +313,12 @@ class _StatusState extends State<Status> {
   }
 
   Future<void> _loadCurrentQueueStatus() async {
+    final hasCachedQueue = _queueData != null;
     if (mounted) {
       setState(() {
-        _isLoading = true;
+        // Keep the current queue visible while refreshing it in the
+        // background. Only show the full-screen loader on the first load.
+        _isLoading = !hasCachedQueue;
         _error = null;
       });
     }
@@ -331,6 +340,7 @@ class _StatusState extends State<Status> {
               queueData['activeBookings'] == null)) {
         setState(() {
           _queueData = null;
+          _isStale = false;
         });
         clinicProvider.stopListeningForUpdates();
         return;
@@ -343,6 +353,7 @@ class _StatusState extends State<Status> {
         print('Premium user with ${bookings.length} active bookings');
         setState(() {
           _queueData = queueData;
+          _isStale = false;
         });
         for (var booking in bookings) {
           // backend returns 'id', not '_id'
@@ -367,6 +378,7 @@ class _StatusState extends State<Status> {
       if (currentQueue == null) {
         setState(() {
           _queueData = null;
+          _isStale = false;
         });
         clinicProvider.stopListeningForUpdates();
         return;
@@ -378,6 +390,7 @@ class _StatusState extends State<Status> {
       if (status == 'served') {
         setState(() {
           _queueData = null;
+          _isStale = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -404,6 +417,7 @@ class _StatusState extends State<Status> {
 
       setState(() {
         _queueData = queueData;
+        _isStale = false;
       });
 
       // backend returns 'id', not '_id'
@@ -420,7 +434,10 @@ class _StatusState extends State<Status> {
       print('Error loading queue status: $e');
       if (mounted) {
         setState(() {
-          _error = 'Error loading queue status: $e';
+          _isStale = _queueData != null;
+          _error = _queueData == null
+              ? 'Unable to load queue status. Please try again.'
+              : null;
         });
       }
     } finally {
@@ -544,6 +561,35 @@ class _StatusState extends State<Status> {
               foregroundColor: Colors.white,
             ),
             child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStaleBanner(bool isDarkMode) {
+    return Container(
+      width: double.infinity,
+      color: isDarkMode ? Colors.orange.shade900 : Colors.orange.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Icon(
+            Icons.cloud_off,
+            size: 18,
+            color: isDarkMode ? Colors.orange.shade200 : Colors.orange.shade800,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Connection interrupted. Showing your last known queue status.',
+              style: TextStyle(
+                color: isDarkMode
+                    ? Colors.orange.shade100
+                    : Colors.orange.shade900,
+                fontSize: 13,
+              ),
+            ),
           ),
         ],
       ),

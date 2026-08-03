@@ -107,10 +107,11 @@ class ClinicProvider with ChangeNotifier {
         doctorId: doctorId,
       );
 
-      // Always create a valid queue data structure even if response is empty
+      // Replace the snapshot only after a successful response. Transient
+      // network failures are handled below without clearing the last queue.
       _currentQueue = {
         'current': response['current'] ?? 0,
-        'nextNumber': (response['current'] ?? 0) + 1,
+        'nextNumber': response['nextNumber'] ?? (response['current'] ?? 0) + 1,
         'upcoming': response['upcoming'] ?? [],
         'totalWaiting': response['totalWaiting'] ?? 0,
         'avgWaitTime': response['avgWaitTime'] ?? 15,
@@ -120,20 +121,11 @@ class ClinicProvider with ChangeNotifier {
             doctorId != null, // Add flag to identify doctor-specific queue
       };
 
+      _error = null;
       notifyListeners();
     } catch (e) {
       print('Error loading current queue: $e');
-      // Set default queue data instead of showing error
-      _currentQueue = {
-        'current': 0,
-        'nextNumber': 1,
-        'upcoming': [],
-        'totalWaiting': 0,
-        'avgWaitTime': 15,
-        'canCallNext': false,
-        '_lastUpdated': DateTime.now().toIso8601String(),
-        'isDoctorQueue': doctorId != null,
-      };
+      _error = 'Unable to refresh queue data. Showing the last known status.';
       notifyListeners();
     }
   }
@@ -252,13 +244,12 @@ class ClinicProvider with ChangeNotifier {
       }
       _error = e.toString();
       notifyListeners();
-      return null;
+      rethrow;
     }
   }
 
   // Shared authenticated Socket.IO service.
   String? _currentListeningClinicId;
-  Timer? _pollingTimer;
 
   void startListeningForUpdates(String clinicId, {String? doctorId}) {
     // Check if we're already listening to the same clinic and doctor
@@ -272,8 +263,6 @@ class ClinicProvider with ChangeNotifier {
     }
 
     stopListeningForUpdates();
-    stopPolling();
-
     _currentListeningClinicId = clinicId;
 
     _connectToSocket(clinicId, doctorId: doctorId);
@@ -354,27 +343,6 @@ class ClinicProvider with ChangeNotifier {
     });
   }
 
-  void startPollingForUpdates(String clinicId, {String? doctorId}) {
-    // Fallback polling only when Socket.IO fails
-    print('Starting fallback polling for clinic: $clinicId, doctor: $doctorId');
-
-    _pollingTimer = Timer.periodic(Duration(seconds: 10), (timer) async {
-      if (_currentListeningClinicId == clinicId) {
-        try {
-          await loadCurrentQueue(
-            clinicId,
-            forceRefresh: true,
-            doctorId: doctorId,
-          );
-        } catch (e) {
-          print('Polling error: $e');
-        }
-      } else {
-        timer.cancel();
-      }
-    });
-  }
-
   Future<void> _connectToSocket(String clinicId, {String? doctorId}) async {
     try {
       // Only connect if not already connected, otherwise just join rooms
@@ -404,6 +372,9 @@ class ClinicProvider with ChangeNotifier {
     _queueUpdateSubscription?.cancel();
     _clinicStatusSubscription?.cancel();
     _doctorAvailabilitySubscription?.cancel();
+    _queueUpdateSubscription = null;
+    _clinicStatusSubscription = null;
+    _doctorAvailabilitySubscription = null;
   }
 
   void clearSpecificError(String errorPattern) {
@@ -417,25 +388,14 @@ class ClinicProvider with ChangeNotifier {
   StreamSubscription? _queueUpdateSubscription;
   StreamSubscription? _clinicStatusSubscription;
   StreamSubscription? _doctorAvailabilitySubscription;
+  StreamSubscription? _globalClinicStatusSubscription;
 
   @override
   void dispose() {
     stopListeningForUpdates();
-    stopPolling();
-    _queueUpdateSubscription?.cancel();
-    _clinicStatusSubscription?.cancel();
-    _doctorAvailabilitySubscription?.cancel();
+    _globalClinicStatusSubscription?.cancel();
     // Don't disconnect socket in dispose - let it be managed globally
     super.dispose();
-  }
-
-  void stopPolling() {
-    _pollingTimer?.cancel();
-    _pollingTimer = null;
-  }
-
-  void startPollingForClinicUpdates() {
-    // Polling disabled to prevent screen flickering
   }
 
   void clearError() {
@@ -445,13 +405,14 @@ class ClinicProvider with ChangeNotifier {
 
   void clearData() {
     stopListeningForUpdates();
-    stopPolling();
     _clinics.clear();
     _selectedClinic = null;
     _currentQueue = null;
     _error = null;
     _isLoading = false;
     _currentListeningClinicId = null;
+    _globalClinicStatusSubscription?.cancel();
+    _globalClinicStatusSubscription = null;
     // Socket remains connected for global events
     notifyListeners();
   }
@@ -461,7 +422,11 @@ class ClinicProvider with ChangeNotifier {
   }
 
   void _setupClinicStatusListener() {
-    EventBus().onClinicStatusUpdate.listen((event) {
+    if (_globalClinicStatusSubscription != null) return;
+
+    _globalClinicStatusSubscription = EventBus().onClinicStatusUpdate.listen((
+      event,
+    ) {
       print(
         'Real-time clinic status update received for clinic ${event.clinicId}',
       );

@@ -390,7 +390,7 @@ export const logoutUser = async (req, res) => {
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    await authService.handleUserLogout(decoded.id);
+    await authService.handleUserLogout(decoded.id, decoded.role);
 
     res.json({ message: 'Logged out successfully' });
   } catch (err) {

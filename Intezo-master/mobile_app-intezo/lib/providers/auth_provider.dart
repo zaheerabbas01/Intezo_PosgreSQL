@@ -1,18 +1,42 @@
 // lib/providers/auth_provider.dart
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../services/auth_service.dart';
+import '../services/app_navigation_service.dart';
+import '../services/session_events.dart';
 
 class AuthProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _isLoggedIn = false;
   String? _error;
+  bool _handlingSessionExpiry = false;
+  late final StreamSubscription<void> _sessionExpiredSubscription;
 
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _isLoggedIn;
   String? get error => _error;
 
   AuthProvider() {
-    checkLoginStatus();
+    _sessionExpiredSubscription = SessionEvents.onExpired.listen((_) {
+      unawaited(_handleSessionExpired());
+    });
+    unawaited(checkLoginStatus());
+  }
+
+  Future<void> _handleSessionExpired() async {
+    if (_handlingSessionExpiry || !_isLoggedIn) return;
+    _handlingSessionExpiry = true;
+
+    try {
+      await AuthService.logout();
+      _isLoggedIn = false;
+      _error = 'Your session expired. Please sign in again.';
+      notifyListeners();
+      await AppNavigationService.showLogin();
+    } finally {
+      _handlingSessionExpiry = false;
+    }
   }
 
   Future<void> checkLoginStatus() async {
@@ -94,5 +118,11 @@ class AuthProvider with ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _sessionExpiredSubscription.cancel();
+    super.dispose();
   }
 }

@@ -18,6 +18,7 @@ import 'providers/patient_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/fcm_service.dart';
 import 'services/notification_service.dart';
+import 'services/app_navigation_service.dart';
 import 'services/secure_storage_service.dart';
 
 void main() {
@@ -117,6 +118,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'Intezo',
             debugShowCheckedModeBanner: false,
+            navigatorKey: AppNavigationService.navigatorKey,
             theme: themeProvider.themeData,
             home: const SplashScreen(),
           );

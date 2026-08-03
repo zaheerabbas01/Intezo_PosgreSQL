@@ -91,32 +91,21 @@ class ClinicService {
 
   // lib/services/clinic_service.dart - Update getClinicStatus method
   static Future<Map<String, dynamic>> getClinicStatus(String clinicId) async {
-    try {
-      print('Fetching clinic status for: $clinicId');
-      final response = await ApiService.get(
-        'clinics/$clinicId/status',
-        isPublic: true,
-      );
-      print('Clinic status response: $response');
+    print('Fetching clinic status for: $clinicId');
+    final response = await ApiService.get(
+      'clinics/$clinicId/status',
+      isPublic: true,
+    );
+    print('Clinic status response: $response');
 
-      return {
-        'isOpen': response['isOpen'] ?? false,
-        'operatingHours':
-            response['operatingHours'] ??
-            {'opening': '09:00', 'closing': '17:00'},
-        'name': response['name'] ?? 'Clinic',
-        'lastStatusChange':
-            response['lastStatusChange'], // Add this for better tracking
-      };
-    } catch (e) {
-      print('Error getting clinic status: $e');
-      return {
-        'isOpen': false,
-        'operatingHours': {'opening': '09:00', 'closing': '17:00'},
-        'name': 'Unknown Clinic',
-        'lastStatusChange': null,
-      };
-    }
+    return {
+      'isOpen': response['isOpen'] ?? false,
+      'operatingHours':
+          response['operatingHours'] ??
+          {'opening': '09:00', 'closing': '17:00'},
+      'name': response['name'] ?? 'Clinic',
+      'lastStatusChange': response['lastStatusChange'],
+    };
   }
 
   // OPTIMIZED: Get recently visited clinics
@@ -266,29 +255,11 @@ class ClinicService {
       if (response is Map<String, dynamic>) {
         return response;
       } else {
-        print('Unexpected response format: $response');
-        return {
-          'current': 0,
-          'nextNumber': 1,
-          'upcoming': [],
-          'totalWaiting': 0,
-          'avgWaitTime': 15,
-          'canCallNext': false,
-          'isDoctorQueue': true,
-        };
+        throw Exception('Unexpected queue response from server');
       }
     } catch (e) {
       print('Error getting real-time queue: $e');
-      // Return default data instead of throwing exception
-      return {
-        'current': 0,
-        'nextNumber': 1,
-        'upcoming': [],
-        'totalWaiting': 0,
-        'avgWaitTime': 15,
-        'canCallNext': false,
-        'isDoctorQueue': doctorId != null,
-      };
+      rethrow;
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/patient.dart';
 import 'api_service.dart';
+import 'app_navigation_service.dart';
 import 'database_service.dart';
 import 'fcm_service.dart';
 import 'network_service.dart';
@@ -105,6 +106,8 @@ class AuthService {
     } catch (e) {
       debugPrint('FCM token registration failed: $e');
     }
+
+    await AppNavigationService.flushPending();
   }
 
   static Future<bool> isLoggedIn() async {
@@ -126,6 +129,7 @@ class AuthService {
       await DatabaseService.clearAllData();
       await prefs.clear();
       await SecureStorageService.clearSession();
+      AppNavigationService.clearPending();
 
       debugPrint('Logout completed successfully');
     } catch (e) {

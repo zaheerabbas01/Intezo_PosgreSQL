@@ -9,9 +9,9 @@ if (-not (Test-Path 'android/key.properties')) {
 flutter pub get
 flutter analyze --no-fatal-infos
 flutter test
-flutter build appbundle --release --obfuscate --split-debug-info=build/symbols/android
+flutter build appbundle --release --flavor patient -t lib/main.dart --obfuscate --split-debug-info=build/symbols/android
 
-$bundle = Resolve-Path 'build/app/outputs/bundle/release/app-release.aab'
+$bundle = Resolve-Path 'build/app/outputs/bundle/patientRelease/app-patient-release.aab'
 $hash = (Get-FileHash $bundle -Algorithm SHA256).Hash
 
 Write-Host "Production bundle: $bundle"

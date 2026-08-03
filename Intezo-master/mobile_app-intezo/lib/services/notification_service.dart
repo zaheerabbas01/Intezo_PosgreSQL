@@ -1,8 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'app_navigation_service.dart';
 import 'api_service.dart';
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  final payload = response.payload;
+  if (payload != null && payload.isNotEmpty) {
+    unawaited(NotificationService.storePendingNavigation(payload));
+  }
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -11,6 +22,8 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+
+  static const String _pendingNavigationKey = 'pending_notification_navigation';
 
   Future<void> initialize() async {
     const androidSettings = AndroidInitializationSettings(
@@ -30,11 +43,16 @@ class NotificationService {
     await _notifications.initialize(
       settings,
       onDidReceiveNotificationResponse: _onNotificationTap,
-      onDidReceiveBackgroundNotificationResponse: _onNotificationTap,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     await _createNotificationChannels();
     await _requestPermissions();
+
+    final pendingPayload = await _consumePendingNavigation();
+    if (pendingPayload != null) {
+      await AppNavigationService.handleNotificationPayload(pendingPayload);
+    }
   }
 
   Future<void> _createNotificationChannels() async {
@@ -92,23 +110,22 @@ class NotificationService {
   static void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload != null) {
-      _handleNotificationTap(payload);
+      unawaited(AppNavigationService.handleNotificationPayload(payload));
     }
   }
 
-  static void _handleNotificationTap(String payload) {
-    if (payload.startsWith('clinic:')) {
-      final clinicId = payload.split(':')[1];
-      print('Navigate to clinic: $clinicId');
-      // Add navigation logic here
-    } else if (payload.startsWith('doctor:')) {
-      final doctorId = payload.split(':')[1];
-      print('Navigate to doctor: $doctorId');
-      // Add navigation logic here
-    } else if (payload == 'status') {
-      print('Navigate to status page');
-      // Add navigation logic here
+  static Future<void> storePendingNavigation(String payload) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingNavigationKey, payload);
+  }
+
+  static Future<String?> _consumePendingNavigation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = prefs.getString(_pendingNavigationKey);
+    if (payload != null) {
+      await prefs.remove(_pendingNavigationKey);
     }
+    return payload;
   }
 
   Future<void> _requestPermissions() async {
@@ -184,8 +201,9 @@ class NotificationService {
   Future<void> showDoctorAvailableNotification(
     String doctorName,
     String clinicName,
-    String doctorId,
-  ) async {
+    String doctorId, {
+    String? clinicId,
+  }) async {
     const androidDetails = AndroidNotificationDetails(
       'doctor_channel',
       'Doctor Notifications',
@@ -201,7 +219,7 @@ class NotificationService {
       'Doctor Now Available!',
       'Dr. $doctorName is now available at $clinicName\nTap to view doctor details',
       notificationDetails,
-      payload: 'doctor:$doctorId',
+      payload: 'doctor:$doctorId${clinicId == null ? '' : ':$clinicId'}',
     );
   }
 

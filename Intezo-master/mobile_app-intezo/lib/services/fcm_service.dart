@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'app_navigation_service.dart';
 import 'notification_service.dart';
 import 'api_service.dart';
 import 'secure_storage_service.dart';
@@ -116,13 +119,14 @@ class FCMService {
         data['doctorName'] ?? 'Doctor',
         data['clinicName'] ?? 'Clinic',
         data['doctorId'] ?? '',
+        clinicId: data['clinicId']?.toString(),
       );
       // Remove notification preference after showing
       NotificationService().removeDoctorNotification(data['doctorId'] ?? '');
     } else if (type == 'queue_update') {
       NotificationService().showQueueNotification(
-        int.parse(data['currentNumber'] ?? '0'),
-        int.parse(data['patientNumber'] ?? '0'),
+        _parseInt(data['currentNumber']),
+        _parseInt(data['patientNumber']),
         data['clinicName'] ?? 'Clinic',
         data['doctorName'] ?? 'Doctor',
       );
@@ -150,18 +154,31 @@ class FCMService {
   }
 
   void _navigateToClinic(String clinicId) {
-    // Navigate to clinic page - implement based on your routing
-    print('Navigate to clinic: $clinicId');
+    if (clinicId.isNotEmpty) {
+      unawaited(
+        AppNavigationService.handleNotificationPayload('clinic:$clinicId'),
+      );
+    }
   }
 
   void _navigateToDoctor(String doctorId, String clinicId) {
-    // Navigate to doctor page - implement based on your routing
-    print('Navigate to doctor: $doctorId in clinic: $clinicId');
+    if (doctorId.isNotEmpty) {
+      final clinicSuffix = clinicId.isNotEmpty ? ':$clinicId' : '';
+      unawaited(
+        AppNavigationService.handleNotificationPayload(
+          'doctor:$doctorId$clinicSuffix',
+        ),
+      );
+    }
   }
 
   void _navigateToStatus() {
-    // Navigate to status page - implement based on your routing
-    print('Navigate to status page');
+    unawaited(AppNavigationService.handleNotificationPayload('status'));
+  }
+
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   // Manual method to register FCM token for existing users

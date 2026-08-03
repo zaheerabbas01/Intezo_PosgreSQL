@@ -222,7 +222,16 @@ export const verifyAdminStatus = async (adminId, verificationCode) => {
 
 export const logoutUserFromAll = async (user, type) => { if (type === 'patient') await Patient.update({ fcmToken: null }, { where: { id: user.id } }); return true; };
 
-export const handleUserLogout = async (userId) => {
+export const handleUserLogout = async (userId, role) => {
+  if (role === 'patient') {
+    try {
+      await Patient.update({ fcmToken: null }, { where: { id: userId } });
+    } catch (err) {
+      // A failed push-token cleanup must not prevent local logout.
+      console.warn('Unable to clear patient push token during logout');
+    }
+  }
+
   try { await redisClient.del(`user:${userId}:online`); } catch (err) { console.warn('Redis offline during logout'); }
   await logActivity('user_logout', `User logged out`);
   await publishAdminUpdate('user_offline', { userId, status: 'offline' });
