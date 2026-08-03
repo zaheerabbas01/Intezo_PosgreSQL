@@ -18,6 +18,8 @@ $releaseRoot = [IO.Path]::GetFullPath((Join-Path $publicRoot 'releases'))
 $externalArtifactRoot = [IO.Path]::GetFullPath((Join-Path $hostingRoot 'artifacts\releases'))
 $outputRoot = Join-Path $mobileRoot 'build\app\outputs\flutter-apk'
 $symbolsRoot = Join-Path $mobileRoot 'build\symbols\android'
+$flutterFlavor = 'patient'
+$flutterTarget = 'lib/main.dart'
 
 if (-not $releaseRoot.StartsWith($publicRoot + [IO.Path]::DirectorySeparatorChar)) {
     throw "Unsafe release directory: $releaseRoot"
@@ -63,6 +65,7 @@ if ($FirebaseBlaze) {
 }
 
 $versionReleaseRoot = Join-Path $artifactRoot $releaseName
+$latestArtifactRoot = if ($FirebaseBlaze) { $publicRoot } else { $externalArtifactRoot }
 
 function Invoke-Checked {
     param(
@@ -101,7 +104,7 @@ if (-not $SkipBuild) {
     try {
         Invoke-Checked 'flutter' 'pub' 'get'
         Invoke-Checked 'flutter' 'analyze' '--no-fatal-infos'
-        Invoke-Checked 'flutter' 'build' 'apk' '--release' '--split-per-abi' `
+        Invoke-Checked 'flutter' 'build' 'apk' '--release' '--flavor' $flutterFlavor '-t' $flutterTarget '--split-per-abi' `
             '--target-platform' 'android-arm,android-arm64' `
             '--obfuscate' "--split-debug-info=$symbolsRoot"
     } finally {
@@ -121,17 +124,17 @@ New-Item -ItemType Directory -Path $versionReleaseRoot -Force | Out-Null
 
 $downloads = [ordered]@{}
 $downloads['armeabi-v7a'] = Copy-ReleaseArtifact `
-    -Source (Join-Path $outputRoot 'app-armeabi-v7a-release.apk') `
+    -Source (Join-Path $outputRoot 'app-armeabi-v7a-patient-release.apk') `
     -FileName 'intezo-armeabi-v7a.apk'
 $downloads['armeabi-v7a']['androidVersionCode'] = 1000 + $versionCode
 $downloads['arm64-v8a'] = Copy-ReleaseArtifact `
-    -Source (Join-Path $outputRoot 'app-arm64-v8a-release.apk') `
+    -Source (Join-Path $outputRoot 'app-arm64-v8a-patient-release.apk') `
     -FileName 'intezo-arm64-v8a.apk'
 $downloads['arm64-v8a']['androidVersionCode'] = 2000 + $versionCode
 if (-not $SkipBuild) {
     Push-Location $mobileRoot
     try {
-        Invoke-Checked 'flutter' 'build' 'apk' '--release' `
+        Invoke-Checked 'flutter' 'build' 'apk' '--release' '--flavor' $flutterFlavor '-t' $flutterTarget `
             '--target-platform' 'android-arm,android-arm64' `
             '--obfuscate' "--split-debug-info=$symbolsRoot"
     } finally {
@@ -140,9 +143,13 @@ if (-not $SkipBuild) {
 }
 
 $downloads['universal'] = Copy-ReleaseArtifact `
-    -Source (Join-Path $outputRoot 'app-release.apk') `
+    -Source (Join-Path $outputRoot 'app-patient-release.apk') `
     -FileName 'intezo-universal.apk'
 $downloads['universal']['androidVersionCode'] = $versionCode
+
+$latestArtifactPath = Join-Path $latestArtifactRoot 'intezo-app-latest.apk'
+Copy-Item -LiteralPath (Join-Path $versionReleaseRoot 'intezo-universal.apk') `
+    -Destination $latestArtifactPath -Force
 
 $manifest = [ordered]@{
     schemaVersion = 1
@@ -182,6 +189,15 @@ if (-not $SkipDeploy) {
             '--only-show-errors' `
             '--content-type' 'application/vnd.android.package-archive' `
             '--cache-control' 'public,max-age=31536000,immutable' `
+            '--content-disposition' 'attachment'
+
+        Invoke-Checked 'aws' 's3' 'cp' $latestArtifactPath `
+            "s3://$R2BucketName/intezo-app-latest.apk" `
+            '--endpoint-url' $R2EndpointUrl `
+            '--region' 'auto' `
+            '--only-show-errors' `
+            '--content-type' 'application/vnd.android.package-archive' `
+            '--cache-control' 'no-cache' `
             '--content-disposition' 'attachment'
 
         Invoke-Checked 'aws' 's3' 'cp' $manifestPath "s3://$R2BucketName/latest.json" `
